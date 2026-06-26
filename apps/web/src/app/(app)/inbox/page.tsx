@@ -229,9 +229,9 @@ export default function CommunicationPage() {
                       <p className="text-xs text-muted-foreground mt-1 line-clamp-1">{msg.summary}</p>
                     )}
 
-                    {/* Why it matters — show collapsed if not processed yet */}
+                    {/* Unorganized indicator — collapsed only */}
                     {!isOpen && !msg.aiProcessed && (
-                      <p className="text-xs text-muted-foreground/60 mt-1 italic">Not yet reviewed by your assistant</p>
+                      <p className="text-xs text-muted-foreground/50 mt-1">Not yet organized</p>
                     )}
                   </div>
 
@@ -248,7 +248,7 @@ export default function CommunicationPage() {
                     {/* Not yet processed */}
                     {!msg.aiProcessed ? (
                       <div className="flex items-center gap-3">
-                        <p className="text-sm text-muted-foreground flex-1">Your assistant hasn't reviewed this yet.</p>
+                        <p className="text-sm text-muted-foreground flex-1">Not yet organized.</p>
                         <Button
                           size="sm"
                           variant="outline"
@@ -257,7 +257,7 @@ export default function CommunicationPage() {
                           disabled={processAI.isPending}
                         >
                           <Zap className="h-3 w-3 mr-1" />
-                          {processAI.isPending ? 'Reviewing…' : 'Review now'}
+                          {processAI.isPending ? 'Organizing…' : 'Organize now'}
                         </Button>
                       </div>
                     ) : (
@@ -265,7 +265,7 @@ export default function CommunicationPage() {
                         {/* Why it matters */}
                         {whyItMatters && (
                           <div>
-                            <p className="text-[11px] font-semibold text-muted-foreground/70 uppercase tracking-wider mb-1.5">Why it matters</p>
+                            <p className="text-[11px] font-semibold text-muted-foreground/70 uppercase tracking-wider mb-1.5">What matters</p>
                             <p className="text-sm leading-relaxed text-foreground/90">{whyItMatters}</p>
                           </div>
                         )}
@@ -291,7 +291,7 @@ export default function CommunicationPage() {
                         {/* Action items */}
                         {(msg.actionItems as string[] | undefined)?.length ? (
                           <div>
-                            <p className="text-[11px] font-semibold text-muted-foreground/70 uppercase tracking-wider mb-1.5">Needs action</p>
+                            <p className="text-[11px] font-semibold text-muted-foreground/70 uppercase tracking-wider mb-1.5">Next steps</p>
                             <ul className="space-y-1">
                               {(msg.actionItems as string[]).map((item, i) => (
                                 <li key={i} className="flex items-start gap-2 text-sm">

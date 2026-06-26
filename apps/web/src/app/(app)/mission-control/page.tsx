@@ -35,7 +35,7 @@ function MemoryGraph({ messageId }: { messageId: string }) {
   return (
     <div className="mt-3 pt-3 border-t border-border/50">
       <p className="text-[10px] font-semibold text-muted-foreground/50 uppercase tracking-wider mb-2">
-        Business Memory updated
+        Remembered
       </p>
       <div className="space-y-1.5">
         {data.entities.map(entity => {
@@ -82,10 +82,10 @@ interface ActivityJob {
 }
 
 const STAGE_LABELS: Record<string, string> = {
-  understanding: 'Understanding the message…',
-  extracting:    'Extracting commitments and actions…',
-  recording:     'Recording tasks and suggestions…',
-  remembering:   'Storing important context…',
+  understanding: 'Reading the message…',
+  extracting:    'Finding what matters…',
+  recording:     'Updating your lists…',
+  remembering:   'Saving important details…',
   complete:      'Done',
 }
 
@@ -279,7 +279,7 @@ export default function MissionControlPage() {
 
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Mission Control</h1>
-        <p className="text-muted-foreground mt-0.5 text-sm">Full operational state of your assistant</p>
+        <p className="text-muted-foreground mt-0.5 text-sm">What your assistant is working on</p>
       </div>
 
       {/* Pulse status */}
@@ -292,7 +292,7 @@ export default function MissionControlPage() {
             ? running.length === 1
               ? 'Your assistant is working on something…'
               : `Your assistant is working on ${running.length} things…`
-            : 'Your assistant is on standby.'}
+            : 'All set — nothing to do right now.'}
         </p>
         {status?.lastActivity && (
           <p className="ml-auto text-xs text-muted-foreground flex-shrink-0">
@@ -311,13 +311,13 @@ export default function MissionControlPage() {
 
           <div className="flex items-center gap-1.5">
             <div className={`h-1.5 w-1.5 rounded-full ${health.groqConfigured ? 'bg-green-500' : 'bg-orange-400'}`} />
-            <span className="text-foreground/70">{health.groqConfigured ? 'AI connected' : 'AI not configured'}</span>
+            <span className="text-foreground/70">{health.groqConfigured ? 'Ready' : 'Not configured'}</span>
           </div>
 
           {health.lastSuccess && (
             <div className="flex items-center gap-1.5">
               <div className="h-1.5 w-1.5 rounded-full bg-green-500" />
-              <span className="text-foreground/70">Last run {formatDistanceToNow(new Date(health.lastSuccess))} ago</span>
+              <span className="text-foreground/70">Reviewed {formatDistanceToNow(new Date(health.lastSuccess))} ago</span>
             </div>
           )}
 
@@ -331,7 +331,7 @@ export default function MissionControlPage() {
           <div className="flex items-center gap-1.5 ml-auto">
             <Inbox className="h-3.5 w-3.5 text-muted-foreground/60" />
             <span className="text-foreground/70">
-              {health.queue === 0 ? 'Queue clear' : `${health.queue} waiting`}
+              {health.queue === 0 ? 'All caught up' : `${health.queue} to review`}
             </span>
           </div>
         </div>
@@ -402,7 +402,7 @@ export default function MissionControlPage() {
       {/* Audit trail — expandable, shows AI reasoning */}
       {recent.length > 0 && (
         <section>
-          <Label>Recent · tap any row to see reasoning</Label>
+          <Label>Recent activity</Label>
           <div className="space-y-1">
             {recent.map(job => <JobRow key={job.id} job={job} />)}
           </div>
@@ -411,9 +411,9 @@ export default function MissionControlPage() {
 
       {!status && recent.length === 0 && (
         <div className="text-center py-10">
-          <p className="text-sm text-muted-foreground">Nothing yet.</p>
+          <p className="text-sm text-muted-foreground">Everything is organized.</p>
           <p className="text-xs text-muted-foreground mt-1">
-            Connect your inbox in Settings to get started.
+            Connect your inbox in Settings and your assistant will get to work.
           </p>
         </div>
       )}

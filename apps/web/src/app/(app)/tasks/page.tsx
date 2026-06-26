@@ -32,7 +32,7 @@ type SectionKey = typeof SECTIONS[number]['key']
 const SECTION_EMPTY: Record<SectionKey, string> = {
   needs_me:  'Nothing needs you right now.',
   waiting:   'Nothing pending from others.',
-  delegated: 'No follow-ups being tracked.',
+  delegated: 'Nothing to track.',
   completed: 'Nothing completed yet.',
 }
 
@@ -165,7 +165,7 @@ export default function WorkPage() {
               onChange={e => setDraft(e.target.value)}
               onKeyDown={handleKey}
               onBlur={() => { if (!draft.trim()) setAdding(false) }}
-              placeholder="What needs doing — Enter to save, Esc to cancel"
+              placeholder="Add an item…"
               className="w-full h-9 rounded-lg border bg-card px-3 text-sm focus:outline-none focus:ring-1 focus:ring-ring placeholder:text-muted-foreground/60"
             />
           ) : (
@@ -259,7 +259,10 @@ function WorkItem({
                 isOverdue ? 'text-red-500 font-medium' :
                 isDueToday ? 'text-orange-500 font-medium' : ''
               }>
-                {isOverdue ? 'Overdue' : isDueToday ? 'Due today' : `Due ${format(new Date(task.dueDate), 'MMM d')}`}
+                {isOverdue
+                  ? `${formatDistanceToNow(new Date(task.dueDate))} overdue`
+                  : isDueToday ? 'Due today'
+                  : `Due ${format(new Date(task.dueDate), 'MMM d')}`}
               </span>
             )}
 

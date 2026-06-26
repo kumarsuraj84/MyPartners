@@ -116,6 +116,15 @@ export default function HomePage() {
         <p className="text-muted-foreground mt-0.5 text-sm">{format(new Date(), 'EEEE, MMMM d')}</p>
       </div>
 
+      {/* Situation summary — first-person CoS narrative, right after greeting */}
+      {(content?.situationSummary?.length ?? 0) > 0 && (
+        <section className="space-y-1">
+          {content!.situationSummary.map((line, i) => (
+            <p key={i} className="text-sm text-muted-foreground leading-relaxed">{line}</p>
+          ))}
+        </section>
+      )}
+
       {/* Top priority */}
       {content?.topPriority && (
         <div className="px-4 py-3.5 rounded-xl bg-primary/5 border border-primary/20">
@@ -173,7 +182,7 @@ export default function HomePage() {
       {/* Suggested actions */}
       {suggestedActions.length > 0 && (
         <section className="space-y-2">
-          <Label>Suggested</Label>
+          <Label>Suggested next</Label>
           {suggestedActions.slice(0, 5).map(action => (
             <div key={action.id} className="flex items-center gap-3 px-4 py-3 rounded-xl border bg-card">
               <div className="flex-1 min-w-0">
@@ -201,20 +210,9 @@ export default function HomePage() {
         </section>
       )}
 
-      {/* Situation summary — first-person outcome statements from the assistant */}
-      {(content?.situationSummary?.length ?? 0) > 0 && (
-        <section>
-          {content!.situationSummary.map((line, i) => (
-            <p key={i} className="text-sm text-muted-foreground leading-relaxed">
-              {line}
-            </p>
-          ))}
-        </section>
-      )}
-
       {/* Three-column tracker */}
       <section>
-        <Label>Tracking</Label>
+        <Label>In motion</Label>
         <div className="grid grid-cols-3 gap-3 mt-2">
           <TrackerCard
             title="Commitments"
@@ -275,8 +273,8 @@ export default function HomePage() {
       {!isLoading && !hasAttentionItems && suggestedActions.length === 0 && (
         <div className="text-center py-8">
           <CheckCircle2 className="h-7 w-7 mx-auto mb-2.5 text-green-500 opacity-50" />
-          <p className="text-sm font-medium text-foreground/70">Clear.</p>
-          <p className="text-xs text-muted-foreground mt-1">No decisions pending. No urgent items.</p>
+          <p className="text-sm font-medium text-foreground/70">Nothing needs your attention right now.</p>
+          <p className="text-xs text-muted-foreground mt-1">Everything is moving as expected.</p>
         </div>
       )}
     </div>

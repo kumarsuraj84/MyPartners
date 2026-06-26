@@ -128,7 +128,7 @@ Use recentDecisions to avoid suggesting decisions that have already been made.
 
 Return JSON with exactly these keys:
 - greeting: string (warm, one sentence, personal, uses first name placeholder {name})
-- situationSummary: array of 1-3 short strings, each a first-person outcome statement — what the executive needs to know about the current situation, not what you did (e.g. "I've already gone through everything — only two things need you today.", "Three follow-ups are in motion, nothing is at risk of slipping.")
+- situationSummary: array of 1-3 flowing prose sentences in first person — write as a trusted Chief of Staff narrating the morning to the executive. Sound human and calm, not like a bullet list. Each sentence should stand alone as a complete thought. Do NOT use lists or dashes. Examples: "I've already gone through everything — only two conversations need you today." / "Three follow-ups are moving; nothing is at risk of slipping." / "You have one decision to make before the day gets away from you."
 - requiresAttention: array of {title: string, description: string, urgency: 'critical'|'high'|'normal', source: string}
 - decisionsNeeded: array of {title: string, context: string, deadline?: string}
 - commitmentsSummary: string (one sentence from the executive's perspective — what they've committed to)
