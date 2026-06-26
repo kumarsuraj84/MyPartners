@@ -16,6 +16,7 @@ import { memoryRoutes } from './modules/memory/memory.routes.js'
 import { configRoutes } from './modules/config/config.routes.js'
 import { auditRoutes } from './modules/audit/audit.routes.js'
 import { signalsRoutes } from './modules/signals/signals.routes.js'
+import { adminRoutes } from './modules/admin/admin.routes.js'
 import { prisma } from './lib/prisma.js'
 // Commercial foundation: register connectors on startup
 import { registerConnector } from './lib/connector.js'
@@ -88,6 +89,7 @@ await app.register(memoryRoutes, { prefix: '/api/memory' })
 await app.register(configRoutes, { prefix: '/api/config' })
 await app.register(auditRoutes, { prefix: '/api/audit' })
 await app.register(signalsRoutes, { prefix: '/api/signals' })
+await app.register(adminRoutes, { prefix: '/api/admin' })
 
 // Start
 const port = parseInt(process.env.API_PORT || '3001')
