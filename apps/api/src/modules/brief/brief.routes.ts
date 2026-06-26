@@ -2,6 +2,7 @@ import type { FastifyPluginAsync } from 'fastify'
 import { prisma } from '../../lib/prisma.js'
 import { aiService } from '../../lib/ai.js'
 import { getCategoryConfig } from '../../lib/config.js'
+import { generateSignals } from '../../lib/signal-generator.js'
 
 export const briefRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.addHook('preHandler', fastify.authenticate)
@@ -101,6 +102,37 @@ export const briefRoutes: FastifyPluginAsync = async (fastify) => {
       select: { title: true, status: true, madeAt: true },
     })
 
+    // Generate fresh signals and include active ones in context
+    await generateSignals(userId)
+    const activeSignals = await prisma.signal.findMany({
+      where: { userId, isDismissed: false, isResolved: false, snoozedUntil: null },
+      orderBy: { urgency: 'asc' },
+      take: 5,
+      select: { type: true, title: true, businessImpact: true, suggestedAction: true, urgency: true },
+    })
+
+    // Delta: what changed since yesterday's brief
+    const yesterday = new Date(today)
+    yesterday.setDate(yesterday.getDate() - 1)
+    const [newMessagesSinceYesterday, completedSinceYesterday, newlyOverdueSinceYesterday] = await Promise.all([
+      prisma.message.count({
+        where: { userId, receivedAt: { gte: yesterday }, isArchived: false },
+      }),
+      prisma.task.count({
+        where: { userId, status: 'completed', completedAt: { gte: yesterday } },
+      }),
+      prisma.task.count({
+        where: { userId, status: { not: 'completed' }, dueDate: { gte: yesterday, lt: today } },
+      }),
+    ])
+
+    const delta = {
+      newMessages: newMessagesSinceYesterday,
+      completedTasks: completedSinceYesterday,
+      newlyOverdue: newlyOverdueSinceYesterday,
+      activeSignals: activeSignals.length,
+    }
+
     const context = {
       date: new Date().toDateString(),
       unreadMessages,
@@ -114,6 +146,10 @@ export const briefRoutes: FastifyPluginAsync = async (fastify) => {
       // Business Memory enrichment
       senderContext,
       recentDecisions,
+      // Proactive signals
+      activeSignals,
+      // Change delta since yesterday
+      delta,
     }
 
     const briefText = await aiService.complete({
@@ -138,11 +174,17 @@ Use the senderContext to personalize attention items — if you know who someone
 
 Use recentDecisions to avoid suggesting decisions that have already been made.
 
+Use activeSignals to surface proactive observations — overdue commitments, long-unanswered waiting items. Reference them naturally as part of the narrative, not as a list.
+
+Use delta to describe what changed since yesterday: new messages, completed work, newly overdue items. The executive should understand movement, not just current state.
+
 Return JSON with exactly these keys:
 - greeting: string (warm, one sentence, personal, uses first name placeholder {name})
-- situationSummary: array of 1-3 flowing prose sentences in first person — write as a trusted Chief of Staff narrating the morning to the executive. Sound human and calm, not like a bullet list. Each sentence should stand alone as a complete thought. Do NOT use lists or dashes. Examples: "I've already gone through everything — only two conversations need you today." / "Three follow-ups are moving; nothing is at risk of slipping." / "You have one decision to make before the day gets away from you."
+- situationSummary: array of 1-3 flowing prose sentences in first person — write as a trusted Chief of Staff narrating the morning to the executive. Sound human and calm, not like a bullet list. Each sentence should stand alone as a complete thought. Incorporate what changed since yesterday if meaningful. Do NOT use lists or dashes.
 - requiresAttention: array of {title: string, description: string, urgency: 'critical'|'high'|'normal', source: string}
 - decisionsNeeded: array of {title: string, context: string, deadline?: string}
+- newRisks: array of string — new risks that appeared since yesterday (from signals or new messages). Empty array if none.
+- resolvedItems: array of string — items that were pending yesterday but are now resolved. Empty array if none.
 - commitmentsSummary: string (one sentence from the executive's perspective — what they've committed to)
 - followUpsSummary: string (one sentence — what's in motion, not a count)
 - waitingForSummary: string (one sentence — what's pending from others, without listing names)
@@ -166,12 +208,18 @@ Return JSON with exactly these keys:
         situationSummary: ["I've gone through everything. Here's what needs you today."],
         requiresAttention: [],
         decisionsNeeded: [],
+        newRisks: [],
+        resolvedItems: [],
         commitmentsSummary: '',
         followUpsSummary: '',
         waitingForSummary: '',
         topPriority: '',
       }
     }
+
+    // Ensure new fields exist even when the AI omits them
+    if (!Array.isArray(content.newRisks)) content.newRisks = []
+    if (!Array.isArray(content.resolvedItems)) content.resolvedItems = []
 
     // Attach live counts so frontend doesn't need extra queries
     content._meta = {
@@ -182,6 +230,8 @@ Return JSON with exactly these keys:
       waitingForCount: waitingFor.length,
       overdueCount,
       suggestedActionsCount: suggestedActions,
+      signalsCount: activeSignals.length,
+      delta,
     }
 
     return prisma.executiveBrief.upsert({

@@ -359,3 +359,29 @@ model ExecutiveBrief {
   @@unique([userId, date])
   @@map("executive_briefs")
 }
+
+// A Signal is a proactively-generated observation — not a task, not an alert.
+// Generated deterministically from Business Memory; no new AI prompts required.
+model Signal {
+  id              String    @id @default(cuid())
+  userId          String
+  type            String    // overdue_commitment | unacknowledged_urgent | waiting_overdue | follow_up_overdue
+  title           String
+  reason          String    // why this signal was generated ("why am I seeing this?")
+  businessImpact  String    // consequence if ignored ("what happens if I ignore it?")
+  suggestedAction String    // one concrete recommendation
+  urgency         String    @default("normal") // critical | high | normal
+  entityType      String?   // task | message | project
+  entityId        String?   // the specific record that triggered this signal
+  isDismissed     Boolean   @default(false)
+  snoozedUntil    DateTime?
+  isResolved      Boolean   @default(false)
+  metadata        Json?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([userId, isDismissed, isResolved])
+  @@index([userId, type])
+  @@index([userId, entityType, entityId])
+  @@map("signals")
+}

@@ -77,8 +77,15 @@ export const aiRoutes: FastifyPluginAsync = async (fastify) => {
     const setStage = (stage: string) =>
       prisma.aIJob.update({ where: { id: job.id }, data: { metadata: { stage } } })
 
+    // Record timestamps for each stage so replay can build an accurate timeline
+    const stageTimes: Record<string, string> = { started: new Date().toISOString() }
+    const setStageWithTime = async (stage: string) => {
+      stageTimes[stage] = new Date().toISOString()
+      await setStage(stage)
+    }
+
     try {
-      await setStage('understanding')
+      await setStageWithTime('understanding')
 
       const result = await aiService.complete({
         messages: [
@@ -136,7 +143,7 @@ Return exactly this JSON structure:
       let parsed: Record<string, unknown>
       try { parsed = JSON.parse(result) } catch { parsed = { summary: result } }
 
-      await setStage('extracting')
+      await setStageWithTime('extracting')
 
       // Update message with enriched intelligence
       await prisma.message.update({
@@ -156,7 +163,7 @@ Return exactly this JSON structure:
         },
       })
 
-      await setStage('recording')
+      await setStageWithTime('recording')
 
       // Create suggested actions
       const suggestions = (parsed.suggestedActions as Array<{ label: string; type: string; detail?: string }> | undefined) ?? []
@@ -188,7 +195,7 @@ Return exactly this JSON structure:
         })
       }
 
-      await setStage('remembering')
+      await setStageWithTime('remembering')
 
       // Auto-remember: store important context in Memory as narrative notes
       const memoryItems = (parsed.memoryItems as Array<{ title: string; type: string; content: string }> | undefined) ?? []
@@ -215,9 +222,15 @@ Return exactly this JSON structure:
         memoryItems,
       })
 
+      stageTimes.complete = new Date().toISOString()
       await prisma.aIJob.update({
         where: { id: job.id },
-        data: { status: 'completed', completedAt: new Date(), output: parsed, metadata: { stage: 'complete' } },
+        data: {
+          status: 'completed',
+          completedAt: new Date(),
+          output: parsed,
+          metadata: { stage: 'complete', stageTimes },
+        },
       })
 
       return { success: true, result: parsed }
@@ -229,5 +242,88 @@ Return exactly this JSON structure:
       })
       throw error
     }
+  })
+
+  // ── Replay: lifecycle timeline for a single processed message ──────────────
+  // Returns a chronological sequence of events without exposing AI prompts.
+  fastify.get('/replay/:messageId', async (req, reply) => {
+    const { userId } = req.user as { userId: string }
+    const { messageId } = req.params as { messageId: string }
+
+    const [message, job, entities, suggestions, tasks] = await Promise.all([
+      prisma.message.findFirst({ where: { id: messageId, userId } }),
+      prisma.aIJob.findFirst({
+        where: { userId, input: { path: ['messageId'], equals: messageId } },
+        orderBy: { createdAt: 'desc' },
+      }),
+      prisma.messageEntity.count({ where: { messageId } }),
+      prisma.suggestedAction.count({ where: { messageId } }),
+      prisma.task.count({ where: { messageId, userId } }),
+    ])
+
+    if (!message) return reply.code(404).send({ error: 'Message not found' })
+
+    type ReplayEvent = { ts: string; stage: string; label: string; detail: string | null }
+    const events: ReplayEvent[] = []
+
+    events.push({
+      ts: message.receivedAt.toISOString(),
+      stage: 'received',
+      label: 'Received',
+      detail: `From ${message.fromName ?? message.fromAddress}${message.subject ? ` · ${message.subject}` : ''}`,
+    })
+
+    if (job) {
+      const stageTimes = (job.metadata as Record<string, Record<string, string>> | null)?.stageTimes ?? {}
+
+      events.push({
+        ts: stageTimes.understanding ?? job.startedAt?.toISOString() ?? job.createdAt.toISOString(),
+        stage: 'reviewing',
+        label: 'Reviewed',
+        detail: 'Read and understood',
+      })
+
+      if (stageTimes.extracting) {
+        events.push({
+          ts: stageTimes.extracting,
+          stage: 'extracting',
+          label: 'Organized',
+          detail: tasks > 0 ? `${tasks} item${tasks === 1 ? '' : 's'} added to your lists` : 'Nothing actionable found',
+        })
+      }
+
+      if (stageTimes.remembering || entities > 0) {
+        events.push({
+          ts: stageTimes.remembering ?? job.completedAt?.toISOString() ?? job.createdAt.toISOString(),
+          stage: 'memory',
+          label: 'Context built',
+          detail: entities > 0 ? `${entities} item${entities === 1 ? '' : 's'} added to memory` : 'No new context',
+        })
+      }
+
+      if (suggestions > 0) {
+        events.push({
+          ts: stageTimes.recording ?? job.completedAt?.toISOString() ?? job.createdAt.toISOString(),
+          stage: 'recommendations',
+          label: 'Recommendations ready',
+          detail: `${suggestions} action${suggestions === 1 ? '' : 's'} suggested`,
+        })
+      }
+
+      if (job.status === 'completed' && stageTimes.complete) {
+        events.push({ ts: stageTimes.complete, stage: 'complete', label: 'Ready', detail: null })
+      } else if (job.status === 'failed') {
+        events.push({
+          ts: job.completedAt?.toISOString() ?? job.createdAt.toISOString(),
+          stage: 'failed',
+          label: 'Could not complete',
+          detail: null,
+        })
+      }
+    }
+
+    events.sort((a, b) => new Date(a.ts).getTime() - new Date(b.ts).getTime())
+
+    return { messageId, events, processed: message.aiProcessed }
   })
 }

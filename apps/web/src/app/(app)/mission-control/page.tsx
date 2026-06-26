@@ -5,7 +5,7 @@ import {
   CheckCircle2, AlertTriangle, Mail, ListChecks, Zap, ArrowRight,
   ChevronDown, ChevronRight, Activity, Inbox, User, Building2, FolderOpen, Lightbulb,
 } from 'lucide-react'
-import { formatDistanceToNow } from 'date-fns'
+import { formatDistanceToNow, format } from 'date-fns'
 import Link from 'next/link'
 import { useState } from 'react'
 
@@ -212,17 +212,75 @@ function ReasoningOutput({ output }: { output: Record<string, unknown> }) {
   )
 }
 
+interface ReplayEvent {
+  ts: string
+  stage: string
+  label: string
+  detail: string | null
+}
+
+function ReplayTimeline({ messageId }: { messageId: string }) {
+  const { data, isLoading } = useQuery<{ events: ReplayEvent[]; processed: boolean }>({
+    queryKey: ['replay', messageId],
+    queryFn: () => api.get(`/api/ai/replay/${messageId}`),
+  })
+
+  if (isLoading) return (
+    <div className="mt-3 pt-3 border-t border-border/50">
+      <p className="text-[10px] font-semibold text-muted-foreground/50 uppercase tracking-wider mb-2">How it was handled</p>
+      <div className="space-y-2 animate-pulse">
+        <div className="h-3 w-40 bg-muted rounded" />
+        <div className="h-3 w-32 bg-muted rounded" />
+      </div>
+    </div>
+  )
+
+  if (!data?.events.length) return null
+
+  return (
+    <div className="mt-3 pt-3 border-t border-border/50">
+      <p className="text-[10px] font-semibold text-muted-foreground/50 uppercase tracking-wider mb-2.5">How it was handled</p>
+      <div className="relative space-y-2.5 pl-4">
+        {/* Vertical line */}
+        <div className="absolute left-1.5 top-1.5 bottom-1.5 w-px bg-border/50" />
+        {data.events.map((event, i) => (
+          <div key={i} className="relative flex items-start gap-2.5">
+            <div className={`absolute -left-3 mt-0.5 h-2.5 w-2.5 rounded-full border-2 flex-shrink-0 ${
+              event.stage === 'complete' ? 'bg-green-500 border-green-500' :
+              event.stage === 'failed' ? 'bg-orange-400 border-orange-400' :
+              'bg-background border-border'
+            }`} />
+            <div className="flex-1 min-w-0">
+              <div className="flex items-baseline gap-2">
+                <p className="text-xs font-medium text-foreground/80">{event.label}</p>
+                <p className="text-[10px] text-muted-foreground/50 flex-shrink-0">
+                  {format(new Date(event.ts), 'h:mm a')}
+                </p>
+              </div>
+              {event.detail && (
+                <p className="text-[11px] text-muted-foreground/60 mt-0.5">{event.detail}</p>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function JobRow({ job }: { job: ActivityJob }) {
   const [expanded, setExpanded] = useState(false)
   const failed = job.status === 'failed'
+  const messageId = job.input?.messageId && typeof job.input.messageId === 'string' ? job.input.messageId : null
   const hasOutput = !!job.output && Object.keys(job.output).length > 0
+  const isExpandable = hasOutput || !!messageId
 
   return (
     <div className="rounded-lg border bg-card overflow-hidden">
       <button
         className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-accent/30 transition-colors text-left"
-        onClick={() => hasOutput && setExpanded(e => !e)}
-        disabled={!hasOutput}
+        onClick={() => isExpandable && setExpanded(e => !e)}
+        disabled={!isExpandable}
       >
         {failed
           ? <AlertTriangle className="h-3.5 w-3.5 text-orange-400 flex-shrink-0" />
@@ -238,7 +296,7 @@ function JobRow({ job }: { job: ActivityJob }) {
             ? formatDistanceToNow(new Date(job.completedAt)) + ' ago'
             : '—'}
         </p>
-        {hasOutput && (
+        {isExpandable && (
           expanded
             ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
             : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
@@ -247,11 +305,10 @@ function JobRow({ job }: { job: ActivityJob }) {
 
       {expanded && (
         <div className="px-3 pb-3 space-y-1">
+          {/* Replay timeline — shown first for email processing */}
+          {messageId && <ReplayTimeline messageId={messageId} />}
           {job.output && <ReasoningOutput output={job.output} />}
-          {/* Show Business Memory entities extracted from this message */}
-          {job.input?.messageId && typeof job.input.messageId === 'string' && (
-            <MemoryGraph messageId={job.input.messageId} />
-          )}
+          {messageId && <MemoryGraph messageId={messageId} />}
           {failed && job.error && (
             <div className="mt-2 pt-2 border-t border-border/50">
               <p className="text-xs text-orange-600/80">{job.error}</p>

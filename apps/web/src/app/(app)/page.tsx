@@ -4,8 +4,9 @@ import { useAuth } from '@/hooks/use-auth'
 import { api } from '@/lib/api'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { CheckCircle2, AlertCircle, ArrowRight, Users, Calendar } from 'lucide-react'
+import { CheckCircle2, AlertCircle, ArrowRight, Users, Calendar, BellDot, Clock } from 'lucide-react'
 import { format } from 'date-fns'
+import { useState } from 'react'
 
 interface Brief {
   id: string
@@ -14,6 +15,8 @@ interface Brief {
     situationSummary: string[]
     requiresAttention: { title: string; description: string; urgency: 'critical' | 'high' | 'normal'; source: string }[]
     decisionsNeeded: { title: string; context: string; deadline?: string }[]
+    newRisks: string[]
+    resolvedItems: string[]
     commitmentsSummary: string
     followUpsSummary: string
     waitingForSummary: string
@@ -26,8 +29,21 @@ interface Brief {
       waitingForCount: number
       overdueCount: number
       suggestedActionsCount: number
+      signalsCount: number
     }
   }
+}
+
+interface Signal {
+  id: string
+  type: string
+  title: string
+  reason: string
+  businessImpact: string
+  suggestedAction: string
+  urgency: 'critical' | 'high' | 'normal'
+  entityType?: string
+  entityId?: string
 }
 
 interface Task {
@@ -77,6 +93,21 @@ export default function HomePage() {
     queryFn: () => api.get('/api/actions'),
   })
 
+  const { data: signals = [] } = useQuery<Signal[]>({
+    queryKey: ['signals'],
+    queryFn: () => api.get('/api/signals'),
+  })
+
+  const dismissSignal = useMutation({
+    mutationFn: (id: string) => api.patch(`/api/signals/${id}/dismiss`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['signals'] }),
+  })
+
+  const snoozeSignal = useMutation({
+    mutationFn: (id: string) => api.patch(`/api/signals/${id}/snooze`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['signals'] }),
+  })
+
   const dismissAction = useMutation({
     mutationFn: (id: string) => api.patch(`/api/actions/${id}/dismiss`),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['actions'] }),
@@ -121,6 +152,21 @@ export default function HomePage() {
         <section className="space-y-1">
           {content!.situationSummary.map((line, i) => (
             <p key={i} className="text-sm text-muted-foreground leading-relaxed">{line}</p>
+          ))}
+        </section>
+      )}
+
+      {/* Signals */}
+      {signals.length > 0 && (
+        <section className="space-y-2">
+          <Label>On my radar</Label>
+          {signals.slice(0, 4).map(signal => (
+            <SignalCard
+              key={signal.id}
+              signal={signal}
+              onDismiss={() => dismissSignal.mutate(signal.id)}
+              onSnooze={() => snoozeSignal.mutate(signal.id)}
+            />
           ))}
         </section>
       )}
@@ -277,6 +323,71 @@ export default function HomePage() {
           <p className="text-xs text-muted-foreground mt-1">Everything is moving as expected.</p>
         </div>
       )}
+    </div>
+  )
+}
+
+function SignalCard({
+  signal, onDismiss, onSnooze,
+}: {
+  signal: Signal
+  onDismiss: () => void
+  onSnooze: () => void
+}) {
+  const [expanded, setExpanded] = useState(false)
+  return (
+    <div
+      className={`rounded-xl border px-4 py-3.5 ${
+        signal.urgency === 'critical'
+          ? 'border-red-200 bg-red-50/40'
+          : signal.urgency === 'high'
+          ? 'border-orange-200 bg-orange-50/30'
+          : 'border-border bg-card'
+      }`}
+    >
+      <div className="flex items-start gap-3">
+        <BellDot className={`h-4 w-4 mt-0.5 flex-shrink-0 ${
+          signal.urgency === 'critical' ? 'text-red-500' :
+          signal.urgency === 'high' ? 'text-orange-400' : 'text-muted-foreground'
+        }`} />
+        <div className="flex-1 min-w-0">
+          <button
+            onClick={() => setExpanded(e => !e)}
+            className="text-left w-full"
+          >
+            <p className="text-sm font-medium leading-snug">{signal.title}</p>
+            {!expanded && (
+              <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed line-clamp-1">{signal.reason}</p>
+            )}
+          </button>
+          {expanded && (
+            <div className="mt-2 space-y-1.5">
+              <p className="text-xs text-muted-foreground leading-relaxed">{signal.reason}</p>
+              {signal.businessImpact && (
+                <p className="text-xs text-foreground/70 leading-relaxed">{signal.businessImpact}</p>
+              )}
+              {signal.suggestedAction && (
+                <p className="text-xs font-medium text-primary leading-relaxed">{signal.suggestedAction}</p>
+              )}
+            </div>
+          )}
+          <div className="flex items-center gap-1.5 mt-2">
+            <button
+              onClick={onSnooze}
+              className="flex items-center gap-1 h-6 px-2 rounded text-[11px] text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+            >
+              <Clock className="h-3 w-3" />
+              Snooze
+            </button>
+            <button
+              onClick={onDismiss}
+              className="h-6 px-2 rounded text-[11px] text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }
