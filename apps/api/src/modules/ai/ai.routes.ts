@@ -12,18 +12,28 @@ export const aiRoutes: FastifyPluginAsync = async (fastify) => {
 
   fastify.get('/activity', async (req) => {
     const { userId } = req.user as { userId: string }
-    // Human-readable activity for Mission Control
-    const [jobs, recentMessages, todayTasks] = await Promise.all([
+    const todayStart = new Date()
+    todayStart.setHours(0, 0, 0, 0)
+
+    const [jobs, needsAttention, totalUnread, activeFollowUps, activeCommitments, waitingFor] = await Promise.all([
       prisma.aIJob.findMany({ where: { userId }, orderBy: { createdAt: 'desc' }, take: 10 }),
-      prisma.message.count({ where: { userId, aiProcessed: true } }),
-      prisma.task.count({ where: { userId, createdAt: { gte: new Date(new Date().setHours(0,0,0,0)) } } }),
+      // What actually needs the executive — unread urgent or high priority
+      prisma.message.count({ where: { userId, isRead: false, isArchived: false, priority: { in: ['urgent', 'high'] } } }),
+      prisma.message.count({ where: { userId, isRead: false, isArchived: false } }),
+      prisma.task.count({ where: { userId, category: 'follow_up', status: { not: 'completed' } } }),
+      prisma.task.count({ where: { userId, category: 'commitment', status: { not: 'completed' } } }),
+      prisma.task.count({ where: { userId, category: 'waiting_for', status: { not: 'completed' } } }),
     ])
 
     return {
       jobs,
-      summary: {
-        messagesProcessed: recentMessages,
-        tasksCreatedToday: todayTasks,
+      // Outcome-focused: what the executive needs to know, not what was processed
+      status: {
+        needsAttention,
+        totalUnread,
+        activeFollowUps,
+        activeCommitments,
+        waitingFor,
         activeJobs: jobs.filter(j => j.status === 'running').length,
         lastActivity: jobs[0]?.createdAt ?? null,
       },

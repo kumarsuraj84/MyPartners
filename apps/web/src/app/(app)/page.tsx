@@ -11,7 +11,7 @@ interface Brief {
   id: string
   content: {
     greeting: string
-    handledByAI: string[]
+    situationSummary: string[]
     requiresAttention: { title: string; description: string; urgency: 'critical' | 'high' | 'normal'; source: string }[]
     decisionsNeeded: { title: string; context: string; deadline?: string }[]
     commitmentsSummary: string
@@ -201,15 +201,13 @@ export default function HomePage() {
         </section>
       )}
 
-      {/* AI handled */}
-      {(content?.handledByAI?.length ?? 0) > 0 && (
-        <section className="space-y-1">
-          <Label>Handled by assistant</Label>
-          {content!.handledByAI.map((item, i) => (
-            <div key={i} className="flex items-center gap-2.5 py-1.5 px-1">
-              <CheckCircle2 className="h-3.5 w-3.5 text-green-500 flex-shrink-0" />
-              <p className="text-sm text-muted-foreground">{item}</p>
-            </div>
+      {/* Situation summary — first-person outcome statements from the assistant */}
+      {(content?.situationSummary?.length ?? 0) > 0 && (
+        <section>
+          {content!.situationSummary.map((line, i) => (
+            <p key={i} className="text-sm text-muted-foreground leading-relaxed">
+              {line}
+            </p>
           ))}
         </section>
       )}
