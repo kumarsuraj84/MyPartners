@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify'
 import { prisma } from '../../lib/prisma.js'
 import { aiService } from '../../lib/ai.js'
+import { getCategoryConfig } from '../../lib/config.js'
 
 export const briefRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.addHook('preHandler', fastify.authenticate)
@@ -25,10 +26,21 @@ export const briefRoutes: FastifyPluginAsync = async (fastify) => {
     const today = new Date()
     today.setHours(0, 0, 0, 0)
 
+    const briefConfig = await getCategoryConfig<{
+      urgentMessagesLimit: number
+      decisionsLimit: number
+      commitmentsLimit: number
+      followUpsLimit: number
+      waitingForLimit: number
+      recentDecisionsLimit: number
+    }>(userId, 'brief')
+
+    const assistantConfig = await getCategoryConfig<{ maxTokensBrief: number }>(userId, 'assistant')
+
     const [urgentMessages, unreadMessages, pendingTasks, commitments, followUps, waitingFor, suggestedActions] = await Promise.all([
       prisma.message.findMany({
         where: { userId, priority: { in: ['urgent', 'high'] }, isRead: false, isArchived: false },
-        take: 8,
+        take: briefConfig.urgentMessagesLimit ?? 8,
         orderBy: { receivedAt: 'desc' },
         select: {
           id: true, fromName: true, fromAddress: true, subject: true, summary: true,
@@ -38,25 +50,25 @@ export const briefRoutes: FastifyPluginAsync = async (fastify) => {
       prisma.message.count({ where: { userId, isRead: false, isArchived: false } }),
       prisma.task.findMany({
         where: { userId, category: 'task', status: { in: ['pending', 'in_progress'] } },
-        take: 8,
+        take: briefConfig.urgentMessagesLimit ?? 8,
         orderBy: [{ priority: 'asc' }, { dueDate: 'asc' }],
         select: { id: true, title: true, priority: true, dueDate: true, status: true },
       }),
       prisma.task.findMany({
         where: { userId, category: 'commitment', status: { not: 'completed' } },
-        take: 5,
+        take: briefConfig.commitmentsLimit ?? 5,
         orderBy: [{ priority: 'asc' }, { dueDate: 'asc' }],
         select: { id: true, title: true, dueDate: true, assigneeName: true },
       }),
       prisma.task.findMany({
         where: { userId, category: 'follow_up', status: { not: 'completed' } },
-        take: 5,
+        take: briefConfig.followUpsLimit ?? 5,
         orderBy: { dueDate: 'asc' },
         select: { id: true, title: true, dueDate: true },
       }),
       prisma.task.findMany({
         where: { userId, category: 'waiting_for', status: { not: 'completed' } },
-        take: 5,
+        take: briefConfig.waitingForLimit ?? 5,
         orderBy: { createdAt: 'desc' },
         select: { id: true, title: true, waitingFrom: true, createdAt: true },
       }),
@@ -81,10 +93,10 @@ export const briefRoutes: FastifyPluginAsync = async (fastify) => {
         })
       : []
 
-    // Recent decisions from Business Memory (last 5)
+    // Recent decisions from Business Memory
     const recentDecisions = await prisma.decision.findMany({
       where: { tenantId },
-      take: 5,
+      take: briefConfig.recentDecisionsLimit ?? 5,
       orderBy: { madeAt: 'desc' },
       select: { title: true, status: true, madeAt: true },
     })
@@ -142,7 +154,7 @@ Return JSON with exactly these keys:
         },
       ],
       responseFormat: 'json',
-      maxTokens: 2048,
+      maxTokens: assistantConfig.maxTokensBrief ?? 2048,
     })
 
     let content: Record<string, unknown>

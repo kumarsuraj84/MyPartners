@@ -38,10 +38,10 @@ export async function resolveEntities(input: ResolverInput): Promise<void> {
   const senderOrg = await resolveSenderOrganization(tenantId, input.fromAddress, input.userId)
   const senderPerson = await resolveSenderPerson(tenantId, input.fromAddress, input.fromName, senderOrg?.id ?? null, senderOrg?.name ?? null, input.userId)
 
-  await linkToMessage(input.messageId, 'person', { personId: senderPerson.id }, 1.0, input.fromName ?? input.fromAddress)
+  await linkToMessage(tenantId, input.messageId, 'person', { personId: senderPerson.id }, 1.0, input.fromName ?? input.fromAddress)
 
   if (senderOrg) {
-    await linkToMessage(input.messageId, 'organization', { organizationId: senderOrg.id }, 1.0, senderOrg.name)
+    await linkToMessage(tenantId, input.messageId, 'organization', { organizationId: senderOrg.id }, 1.0, senderOrg.name)
   }
 
   // Process AI-extracted entities
@@ -51,16 +51,16 @@ export async function resolveEntities(input: ResolverInput): Promise<void> {
     if (type === 'person') {
       const person = await resolvePersonByName(tenantId, entity.name, input.userId)
       if (person) {
-        await linkToMessage(input.messageId, 'person', { personId: person.id }, 0.8, entity.context)
+        await linkToMessage(tenantId, input.messageId, 'person', { personId: person.id }, 0.8, entity.context)
       }
 
     } else if (type === 'company' || type === 'organization') {
       const org = await resolveOrganizationByName(tenantId, entity.name, input.userId)
-      await linkToMessage(input.messageId, 'organization', { organizationId: org.id }, 0.85, entity.context)
+      await linkToMessage(tenantId, input.messageId, 'organization', { organizationId: org.id }, 0.85, entity.context)
 
     } else if (type === 'project') {
       const project = await resolveProject(tenantId, entity.name, input.userId)
-      await linkToMessage(input.messageId, 'project', { projectId: project.id }, 0.8, entity.context)
+      await linkToMessage(tenantId, input.messageId, 'project', { projectId: project.id }, 0.8, entity.context)
     }
   }
 
@@ -76,7 +76,7 @@ export async function resolveEntities(input: ResolverInput): Promise<void> {
           createdBy: input.userId,
         },
       })
-      await linkToMessage(input.messageId, 'decision', { decisionId: decision.id }, 0.9, item.title)
+      await linkToMessage(tenantId, input.messageId, 'decision', { decisionId: decision.id }, 0.9, item.title)
     }
   }
 }
@@ -165,6 +165,7 @@ async function resolveProject(tenantId: string, name: string, userId: string) {
 }
 
 async function linkToMessage(
+  tenantId: string,
   messageId: string,
   entityType: string,
   ids: { personId?: string; organizationId?: string; projectId?: string; decisionId?: string },
@@ -172,7 +173,6 @@ async function linkToMessage(
   extractedText?: string,
 ) {
   // Avoid duplicate links for the same entity
-  const entityId = ids.personId ?? ids.organizationId ?? ids.projectId ?? ids.decisionId
   const existing = await prisma.messageEntity.findFirst({
     where: {
       messageId,
@@ -186,6 +186,6 @@ async function linkToMessage(
   if (existing) return
 
   await prisma.messageEntity.create({
-    data: { messageId, entityType, confidence, extractedText, ...ids },
+    data: { tenantId, messageId, entityType, confidence, extractedText, ...ids },
   })
 }

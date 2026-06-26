@@ -7,13 +7,72 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model User {
+// ─── Commercial Foundation ────────────────────────────────────────────────────
+// tenantId = userId in V1 (single-user tenants).
+// Tenant model is the anchor for future multi-user workspaces.
+
+model Tenant {
   id        String   @id @default(cuid())
-  email     String   @unique
   name      String
-  role      String   @default("executive")
+  plan      String   @default("free")    // free, starter, professional, enterprise
+  isActive  Boolean  @default(true)
+  metadata  Json?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  configs   TenantConfig[]
+
+  @@map("tenants")
+}
+
+// Versioned key-value configuration per tenant.
+// Replaces all hardcoded business rules, limits, and assistant behaviour.
+model TenantConfig {
+  id        String   @id @default(cuid())
+  tenantId  String
+  category  String   // assistant | priority_rules | business_hours | notifications | reminder_policies | feature_flags | brief
+  key       String
+  value     Json
+  version   Int      @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  createdBy String
+  updatedBy String?
+
+  tenant Tenant? @relation(fields: [tenantId], references: [id])
+
+  @@unique([tenantId, category, key])
+  @@index([tenantId, category])
+  @@map("tenant_configs")
+}
+
+// Append-only audit trail for all significant business events.
+model AuditLog {
+  id        String   @id @default(cuid())
+  tenantId  String
+  userId    String
+  action    String   // created | updated | deleted | connected | disconnected | config_changed | role_changed | plan_changed | ai_provider_changed
+  entity    String   // user | integration | task | message | config | ai_provider | feature_flag
+  entityId  String?
+  before    Json?
+  after     Json?
+  metadata  Json?    // request IP, user agent, session context
+  createdAt DateTime @default(now())
+
+  @@index([tenantId, createdAt])
+  @@index([tenantId, entity, entityId])
+  @@index([userId, createdAt])
+  @@map("audit_logs")
+}
+
+model User {
+  id         String   @id @default(cuid())
+  email      String   @unique
+  name       String
+  role       String   @default("executive") // owner | executive | manager | assistant | administrator
+  plan       String   @default("free")      // free | starter | professional | enterprise
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   integrations     Integration[]
   messages         Message[]
@@ -41,7 +100,8 @@ model Person {
   metadata       Json?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
-  createdBy      String   // userId
+  createdBy      String
+  updatedBy      String?
 
   organizationId  String?
   organization    Organization? @relation(fields: [organizationId], references: [id])
@@ -63,6 +123,7 @@ model Organization {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   createdBy   String
+  updatedBy   String?
 
   persons         Person[]
   projects        Project[]
@@ -83,6 +144,7 @@ model Project {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
   createdBy      String
+  updatedBy      String?
 
   organizationId  String?
   organization    Organization? @relation(fields: [organizationId], references: [id])
@@ -104,6 +166,7 @@ model Decision {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   createdBy   String
+  updatedBy   String?
 
   projectId       String?
   project         Project? @relation(fields: [projectId], references: [id])
@@ -117,6 +180,7 @@ model Decision {
 // Exactly one of personId/organizationId/projectId/decisionId is non-null per row.
 model MessageEntity {
   id             String   @id @default(cuid())
+  tenantId       String   // mirrors the owning tenant for cross-tenant query safety
   messageId      String
   entityType     String   // person | organization | project | decision
   confidence     Float    @default(1.0)
@@ -134,6 +198,7 @@ model MessageEntity {
   project      Project?      @relation(fields: [projectId], references: [id])
   decision     Decision?     @relation(fields: [decisionId], references: [id])
 
+  @@index([tenantId])
   @@index([messageId])
   @@index([personId])
   @@index([organizationId])

@@ -13,7 +13,13 @@ import { briefRoutes } from './modules/brief/brief.routes.js'
 import { aiRoutes } from './modules/ai/ai.routes.js'
 import { actionsRoutes } from './modules/actions/actions.routes.js'
 import { memoryRoutes } from './modules/memory/memory.routes.js'
+import { configRoutes } from './modules/config/config.routes.js'
+import { auditRoutes } from './modules/audit/audit.routes.js'
 import { prisma } from './lib/prisma.js'
+// Commercial foundation: register connectors on startup
+import { registerConnector } from './lib/connector.js'
+import { gmailConnector } from './modules/integrations/gmail.connector.js'
+registerConnector(gmailConnector)
 
 const app = Fastify({ logger: true })
 
@@ -48,6 +54,8 @@ await app.register(briefRoutes, { prefix: '/api/brief' })
 await app.register(aiRoutes, { prefix: '/api/ai' })
 await app.register(actionsRoutes, { prefix: '/api/actions' })
 await app.register(memoryRoutes, { prefix: '/api/memory' })
+await app.register(configRoutes, { prefix: '/api/config' })
+await app.register(auditRoutes, { prefix: '/api/audit' })
 
 // Start
 const port = parseInt(process.env.API_PORT || '3001')

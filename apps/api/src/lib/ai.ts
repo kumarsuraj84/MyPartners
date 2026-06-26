@@ -37,5 +37,27 @@ class GroqProvider implements AIProvider {
   }
 }
 
-// Single AI service instance — swap provider here to change AI backend
-export const aiService: AIProvider = new GroqProvider()
+// ─── Provider Registry ────────────────────────────────────────────────────────
+// Register providers here. No business logic may reference a specific provider.
+// All callers use `aiService` (the active provider) or `getProvider()` by name.
+
+const providerRegistry = new Map<string, AIProvider>()
+
+export function registerProvider(name: string, provider: AIProvider): void {
+  providerRegistry.set(name, provider)
+}
+
+export function getProvider(name: string): AIProvider | undefined {
+  return providerRegistry.get(name)
+}
+
+export function listProviders(): string[] {
+  return Array.from(providerRegistry.keys())
+}
+
+const defaultProvider = new GroqProvider()
+registerProvider('groq', defaultProvider)
+
+// Active AI service — backed by the registry. To switch providers at runtime,
+// update this reference; no other code changes required.
+export const aiService: AIProvider = defaultProvider
