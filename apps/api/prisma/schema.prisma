@@ -26,6 +26,122 @@ model User {
   @@map("users")
 }
 
+// ─── Business Memory Domain Objects ───────────────────────────────────────────
+// tenantId = userId in V1 (each user is their own tenant).
+// When multi-tenant support is added, tenantId references a Tenant model.
+
+model Person {
+  id             String   @id @default(cuid())
+  tenantId       String   // userId in V1
+  name           String
+  email          String?
+  role           String?
+  company        String?  // denormalized from Organization for quick display
+  description    String?
+  metadata       Json?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  createdBy      String   // userId
+
+  organizationId  String?
+  organization    Organization? @relation(fields: [organizationId], references: [id])
+  messageEntities MessageEntity[]
+
+  @@unique([tenantId, email])
+  @@index([tenantId])
+  @@index([tenantId, name])
+  @@map("persons")
+}
+
+model Organization {
+  id          String   @id @default(cuid())
+  tenantId    String
+  name        String
+  domain      String?  // email domain for automatic matching (e.g. "acmecorp.com")
+  description String?
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdBy   String
+
+  persons         Person[]
+  projects        Project[]
+  messageEntities MessageEntity[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+  @@map("organizations")
+}
+
+model Project {
+  id             String   @id @default(cuid())
+  tenantId       String
+  name           String
+  description    String?
+  status         String   @default("active") // active, completed, on_hold
+  metadata       Json?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  createdBy      String
+
+  organizationId  String?
+  organization    Organization? @relation(fields: [organizationId], references: [id])
+  decisions       Decision[]
+  messageEntities MessageEntity[]
+
+  @@index([tenantId])
+  @@map("projects")
+}
+
+model Decision {
+  id          String   @id @default(cuid())
+  tenantId    String
+  title       String
+  description String?
+  status      String   @default("made") // made, pending, reversed
+  madeAt      DateTime @default(now())
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdBy   String
+
+  projectId       String?
+  project         Project? @relation(fields: [projectId], references: [id])
+  messageEntities MessageEntity[]
+
+  @@index([tenantId])
+  @@map("decisions")
+}
+
+// Junction table: links a message to every domain object extracted from it.
+// Exactly one of personId/organizationId/projectId/decisionId is non-null per row.
+model MessageEntity {
+  id             String   @id @default(cuid())
+  messageId      String
+  entityType     String   // person | organization | project | decision
+  confidence     Float    @default(1.0)
+  extractedText  String?  // the text snippet that triggered this extraction
+  createdAt      DateTime @default(now())
+
+  personId       String?
+  organizationId String?
+  projectId      String?
+  decisionId     String?
+
+  message      Message       @relation(fields: [messageId], references: [id])
+  person       Person?       @relation(fields: [personId], references: [id])
+  organization Organization? @relation(fields: [organizationId], references: [id])
+  project      Project?      @relation(fields: [projectId], references: [id])
+  decision     Decision?     @relation(fields: [decisionId], references: [id])
+
+  @@index([messageId])
+  @@index([personId])
+  @@index([organizationId])
+  @@index([projectId])
+  @@index([decisionId])
+  @@map("message_entities")
+}
+
 model Integration {
   id           String   @id @default(cuid())
   userId       String
@@ -76,6 +192,7 @@ model Message {
   user             User              @relation(fields: [userId], references: [id])
   tasks            Task[]
   suggestedActions SuggestedAction[]
+  messageEntities  MessageEntity[]
 
   @@unique([integrationId, externalId])
   @@index([userId, receivedAt])

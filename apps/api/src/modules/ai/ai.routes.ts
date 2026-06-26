@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify'
 import { prisma } from '../../lib/prisma.js'
 import { aiService } from '../../lib/ai.js'
+import { resolveEntities } from '../../lib/entity-resolver.js'
 
 export const aiRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.addHook('preHandler', fastify.authenticate)
@@ -189,7 +190,7 @@ Return exactly this JSON structure:
 
       await setStage('remembering')
 
-      // Auto-remember: store important context in Memory
+      // Auto-remember: store important context in Memory as narrative notes
       const memoryItems = (parsed.memoryItems as Array<{ title: string; type: string; content: string }> | undefined) ?? []
       for (const item of memoryItems) {
         await prisma.knowledgeNote.create({
@@ -202,6 +203,17 @@ Return exactly this JSON structure:
           },
         })
       }
+
+      // Build Business Memory: upsert Person, Organization, Project, Decision
+      // and link them all to this message
+      await resolveEntities({
+        userId,
+        messageId: id,
+        fromAddress: message.fromAddress,
+        fromName: message.fromName ?? null,
+        entities: (parsed.entities as Array<{ name: string; type: string; context: string }> | undefined) ?? [],
+        memoryItems,
+      })
 
       await prisma.aIJob.update({
         where: { id: job.id },

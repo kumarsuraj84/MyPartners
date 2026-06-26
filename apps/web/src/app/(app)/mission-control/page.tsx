@@ -1,10 +1,72 @@
 'use client'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/api'
-import { CheckCircle2, AlertTriangle, Mail, ListChecks, Zap, ArrowRight, ChevronDown, ChevronRight, Activity, Inbox } from 'lucide-react'
-import { formatDistanceToNow, formatDistance } from 'date-fns'
+import {
+  CheckCircle2, AlertTriangle, Mail, ListChecks, Zap, ArrowRight,
+  ChevronDown, ChevronRight, Activity, Inbox, User, Building2, FolderOpen, Lightbulb,
+} from 'lucide-react'
+import { formatDistanceToNow } from 'date-fns'
 import Link from 'next/link'
 import { useState } from 'react'
+
+interface MemoryEntity {
+  id: string; entityType: string; confidence: number; extractedText?: string
+  person?: { id: string; name: string; email?: string; organization?: { name: string } | null } | null
+  organization?: { id: string; name: string; domain?: string } | null
+  project?: { id: string; name: string; status: string } | null
+  decision?: { id: string; title: string; status: string } | null
+}
+
+const ENTITY_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
+  person: User,
+  organization: Building2,
+  project: FolderOpen,
+  decision: Lightbulb,
+}
+
+function MemoryGraph({ messageId }: { messageId: string }) {
+  const { data } = useQuery<{ entities: MemoryEntity[] }>({
+    queryKey: ['memory', 'message', messageId],
+    queryFn: () => api.get(`/api/memory/message/${messageId}`),
+  })
+
+  if (!data?.entities.length) return null
+
+  return (
+    <div className="mt-3 pt-3 border-t border-border/50">
+      <p className="text-[10px] font-semibold text-muted-foreground/50 uppercase tracking-wider mb-2">
+        Business Memory updated
+      </p>
+      <div className="space-y-1.5">
+        {data.entities.map(entity => {
+          const Icon = ENTITY_ICONS[entity.entityType] ?? Zap
+          const label = entity.person?.name
+            ?? entity.organization?.name
+            ?? entity.project?.name
+            ?? entity.decision?.title
+            ?? entity.extractedText
+            ?? entity.entityType
+
+          const detail = entity.person?.organization?.name
+            ?? entity.organization?.domain
+            ?? entity.project?.status
+            ?? entity.decision?.status
+
+          return (
+            <div key={entity.id} className="flex items-center gap-2 text-xs">
+              <Icon className="h-3 w-3 text-muted-foreground/50 flex-shrink-0" />
+              <span className="text-foreground/70 font-medium">{label}</span>
+              {detail && <span className="text-muted-foreground/50">· {detail}</span>}
+              {entity.confidence < 0.9 && (
+                <span className="text-muted-foreground/40 ml-auto">{Math.round(entity.confidence * 100)}%</span>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
 
 interface ActivityJob {
   id: string
@@ -183,17 +245,18 @@ function JobRow({ job }: { job: ActivityJob }) {
         )}
       </button>
 
-      {expanded && job.output && (
-        <div className="px-3 pb-3">
-          <ReasoningOutput output={job.output} />
-        </div>
-      )}
-
-      {expanded && failed && job.error && (
-        <div className="px-3 pb-3">
-          <div className="mt-2 pt-2 border-t border-border/50">
-            <p className="text-xs text-orange-600/80">{job.error}</p>
-          </div>
+      {expanded && (
+        <div className="px-3 pb-3 space-y-1">
+          {job.output && <ReasoningOutput output={job.output} />}
+          {/* Show Business Memory entities extracted from this message */}
+          {job.input?.messageId && typeof job.input.messageId === 'string' && (
+            <MemoryGraph messageId={job.input.messageId} />
+          )}
+          {failed && job.error && (
+            <div className="mt-2 pt-2 border-t border-border/50">
+              <p className="text-xs text-orange-600/80">{job.error}</p>
+            </div>
+          )}
         </div>
       )}
     </div>

@@ -27,10 +27,13 @@ export const briefRoutes: FastifyPluginAsync = async (fastify) => {
 
     const [urgentMessages, unreadMessages, pendingTasks, commitments, followUps, waitingFor, suggestedActions] = await Promise.all([
       prisma.message.findMany({
-        where: { userId, priority: 'urgent', isRead: false, isArchived: false },
-        take: 5,
+        where: { userId, priority: { in: ['urgent', 'high'] }, isRead: false, isArchived: false },
+        take: 8,
         orderBy: { receivedAt: 'desc' },
-        select: { id: true, fromName: true, fromAddress: true, subject: true, summary: true, priority: true, receivedAt: true },
+        select: {
+          id: true, fromName: true, fromAddress: true, subject: true, summary: true,
+          priority: true, priorityReason: true, messageCategory: true, receivedAt: true,
+        },
       }),
       prisma.message.count({ where: { userId, isRead: false, isArchived: false } }),
       prisma.task.findMany({
@@ -64,6 +67,28 @@ export const briefRoutes: FastifyPluginAsync = async (fastify) => {
       where: { userId, status: { not: 'completed' }, dueDate: { lt: new Date() } },
     })
 
+    // Business Memory context: who are the senders of urgent messages?
+    const tenantId = userId
+    const senderAddresses = urgentMessages.map(m => m.fromAddress)
+    const senderContext = senderAddresses.length > 0
+      ? await prisma.person.findMany({
+          where: { tenantId, email: { in: senderAddresses } },
+          include: { organization: { select: { name: true } } },
+          select: {
+            name: true, email: true, role: true, company: true,
+            organization: { select: { name: true } },
+          },
+        })
+      : []
+
+    // Recent decisions from Business Memory (last 5)
+    const recentDecisions = await prisma.decision.findMany({
+      where: { tenantId },
+      take: 5,
+      orderBy: { madeAt: 'desc' },
+      select: { title: true, status: true, madeAt: true },
+    })
+
     const context = {
       date: new Date().toDateString(),
       unreadMessages,
@@ -74,6 +99,9 @@ export const briefRoutes: FastifyPluginAsync = async (fastify) => {
       waitingFor,
       suggestedActionsCount: suggestedActions,
       overdueCount,
+      // Business Memory enrichment
+      senderContext,
+      recentDecisions,
     }
 
     const briefText = await aiService.complete({
@@ -93,6 +121,10 @@ Good: "There are two things that can't wait."
 
 Bad: "I created 3 follow-up tasks."
 Good: "I've delegated three follow-ups — nothing falls through."
+
+Use the senderContext to personalize attention items — if you know who someone is (their role, organization), reference it naturally: "Rahul from ABC Corp" not just "a sender".
+
+Use recentDecisions to avoid suggesting decisions that have already been made.
 
 Return JSON with exactly these keys:
 - greeting: string (warm, one sentence, personal, uses first name placeholder {name})
