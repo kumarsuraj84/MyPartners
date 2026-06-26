@@ -12,22 +12,33 @@ export const aiRoutes: FastifyPluginAsync = async (fastify) => {
 
   fastify.get('/activity', async (req) => {
     const { userId } = req.user as { userId: string }
-    const todayStart = new Date()
-    todayStart.setHours(0, 0, 0, 0)
 
-    const [jobs, needsAttention, totalUnread, activeFollowUps, activeCommitments, waitingFor] = await Promise.all([
-      prisma.aIJob.findMany({ where: { userId }, orderBy: { createdAt: 'desc' }, take: 10 }),
-      // What actually needs the executive — unread urgent or high priority
+    const [jobs, needsAttention, totalUnread, activeFollowUps, activeCommitments, waitingFor, queueDepth] = await Promise.all([
+      prisma.aIJob.findMany({
+        where: { userId },
+        orderBy: { createdAt: 'desc' },
+        take: 20,
+        select: {
+          id: true, type: true, status: true, createdAt: true,
+          completedAt: true, error: true, startedAt: true,
+          input: true, output: true,
+        },
+      }),
       prisma.message.count({ where: { userId, isRead: false, isArchived: false, priority: { in: ['urgent', 'high'] } } }),
       prisma.message.count({ where: { userId, isRead: false, isArchived: false } }),
       prisma.task.count({ where: { userId, category: 'follow_up', status: { not: 'completed' } } }),
       prisma.task.count({ where: { userId, category: 'commitment', status: { not: 'completed' } } }),
       prisma.task.count({ where: { userId, category: 'waiting_for', status: { not: 'completed' } } }),
+      prisma.message.count({ where: { userId, aiProcessed: false, isArchived: false } }),
     ])
+
+    const recentJobs = jobs.slice(0, 20)
+    const lastSuccess = recentJobs.find(j => j.status === 'completed')
+    const errorCount = recentJobs.filter(j => j.status === 'failed').length
+    const errorRate = recentJobs.length > 0 ? Math.round((errorCount / recentJobs.length) * 100) : 0
 
     return {
       jobs,
-      // Outcome-focused: what the executive needs to know, not what was processed
       status: {
         needsAttention,
         totalUnread,
@@ -36,6 +47,12 @@ export const aiRoutes: FastifyPluginAsync = async (fastify) => {
         waitingFor,
         activeJobs: jobs.filter(j => j.status === 'running').length,
         lastActivity: jobs[0]?.createdAt ?? null,
+      },
+      health: {
+        queue: queueDepth,
+        lastSuccess: lastSuccess?.completedAt ?? null,
+        errorRate,
+        groqConfigured: !!process.env.GROQ_API_KEY,
       },
     }
   })

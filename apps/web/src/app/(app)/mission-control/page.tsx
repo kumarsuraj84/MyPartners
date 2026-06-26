@@ -1,12 +1,21 @@
 'use client'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/api'
-import { CheckCircle2, AlertTriangle, Mail, ListChecks, Zap, ArrowRight } from 'lucide-react'
-import { formatDistanceToNow } from 'date-fns'
+import { CheckCircle2, AlertTriangle, Mail, ListChecks, Zap, ArrowRight, ChevronDown, ChevronRight, Activity, Inbox } from 'lucide-react'
+import { formatDistanceToNow, formatDistance } from 'date-fns'
 import Link from 'next/link'
+import { useState } from 'react'
 
 interface ActivityJob {
-  id: string; type: string; status: string; createdAt: string; completedAt?: string; error?: string
+  id: string
+  type: string
+  status: string
+  createdAt: string
+  startedAt?: string
+  completedAt?: string
+  error?: string
+  input?: Record<string, unknown>
+  output?: Record<string, unknown>
 }
 
 interface ActivityData {
@@ -19,6 +28,12 @@ interface ActivityData {
     waitingFor: number
     activeJobs: number
     lastActivity: string | null
+  }
+  health: {
+    queue: number
+    lastSuccess: string | null
+    errorRate: number
+    groqConfigured: boolean
   }
 }
 
@@ -80,6 +95,102 @@ function trackingStatement(s: ActivityData['status']): string | null {
   return parts.length > 0 ? parts.join(' ') : null
 }
 
+function ReasoningOutput({ output }: { output: Record<string, unknown> }) {
+  const fields: { label: string; key: string }[] = [
+    { label: 'Summary', key: 'summary' },
+    { label: 'Priority', key: 'priority' },
+    { label: 'Sentiment', key: 'sentiment' },
+  ]
+  const actionItems = output.actionItems as string[] | undefined
+  const commitments = output.commitments as string[] | undefined
+  const followUps = output.followUps as string[] | undefined
+
+  return (
+    <div className="mt-3 pt-3 border-t border-border/50 space-y-2.5 text-xs">
+      {fields.map(f => output[f.key] && (
+        <div key={f.key} className="flex gap-2">
+          <span className="text-muted-foreground/60 w-16 flex-shrink-0">{f.label}</span>
+          <span className="text-foreground/70">{String(output[f.key])}</span>
+        </div>
+      ))}
+      {actionItems && actionItems.length > 0 && (
+        <div className="flex gap-2">
+          <span className="text-muted-foreground/60 w-16 flex-shrink-0">Actions</span>
+          <ul className="space-y-0.5 flex-1">
+            {actionItems.map((a, i) => <li key={i} className="text-foreground/70">· {a}</li>)}
+          </ul>
+        </div>
+      )}
+      {commitments && commitments.length > 0 && (
+        <div className="flex gap-2">
+          <span className="text-muted-foreground/60 w-16 flex-shrink-0">Committed</span>
+          <ul className="space-y-0.5 flex-1">
+            {commitments.map((c, i) => <li key={i} className="text-foreground/70">· {c}</li>)}
+          </ul>
+        </div>
+      )}
+      {followUps && followUps.length > 0 && (
+        <div className="flex gap-2">
+          <span className="text-muted-foreground/60 w-16 flex-shrink-0">Follow-ups</span>
+          <ul className="space-y-0.5 flex-1">
+            {followUps.map((f, i) => <li key={i} className="text-foreground/70">· {f}</li>)}
+          </ul>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function JobRow({ job }: { job: ActivityJob }) {
+  const [expanded, setExpanded] = useState(false)
+  const failed = job.status === 'failed'
+  const hasOutput = !!job.output && Object.keys(job.output).length > 0
+
+  return (
+    <div className="rounded-lg border bg-card overflow-hidden">
+      <button
+        className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-accent/30 transition-colors text-left"
+        onClick={() => hasOutput && setExpanded(e => !e)}
+        disabled={!hasOutput}
+      >
+        {failed
+          ? <AlertTriangle className="h-3.5 w-3.5 text-orange-400 flex-shrink-0" />
+          : <CheckCircle2 className="h-3.5 w-3.5 text-green-500 flex-shrink-0" />
+        }
+        <p className="text-sm flex-1 text-foreground/80">
+          {failed
+            ? `Couldn't complete: ${jobLabel(job.type, 'done').toLowerCase()}`
+            : jobLabel(job.type, 'done')}
+        </p>
+        <p className="text-xs text-muted-foreground flex-shrink-0 mr-1.5">
+          {job.completedAt
+            ? formatDistanceToNow(new Date(job.completedAt)) + ' ago'
+            : '—'}
+        </p>
+        {hasOutput && (
+          expanded
+            ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+            : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+        )}
+      </button>
+
+      {expanded && job.output && (
+        <div className="px-3 pb-3">
+          <ReasoningOutput output={job.output} />
+        </div>
+      )}
+
+      {expanded && failed && job.error && (
+        <div className="px-3 pb-3">
+          <div className="mt-2 pt-2 border-t border-border/50">
+            <p className="text-xs text-orange-600/80">{job.error}</p>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function MissionControlPage() {
   const { data } = useQuery<ActivityData>({
     queryKey: ['ai', 'activity'],
@@ -87,7 +198,7 @@ export default function MissionControlPage() {
     refetchInterval: 8000,
   })
 
-  const { jobs = [], status } = data ?? {}
+  const { jobs = [], status, health } = data ?? {}
   const running = jobs.filter(j => j.status === 'running')
   const recent  = jobs.filter(j => j.status !== 'running')
 
@@ -96,7 +207,7 @@ export default function MissionControlPage() {
 
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Mission Control</h1>
-        <p className="text-muted-foreground mt-0.5 text-sm">What your assistant is working on right now</p>
+        <p className="text-muted-foreground mt-0.5 text-sm">Full operational state of your assistant</p>
       </div>
 
       {/* Pulse status */}
@@ -118,12 +229,47 @@ export default function MissionControlPage() {
         )}
       </div>
 
-      {/* Outcome summary — what the executive needs to know */}
+      {/* Health bar */}
+      {health && (
+        <div className="flex items-center gap-4 px-4 py-3 rounded-xl border bg-card text-xs">
+          <div className="flex items-center gap-1.5">
+            <Activity className="h-3.5 w-3.5 text-muted-foreground/60" />
+            <span className="text-muted-foreground">Health</span>
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            <div className={`h-1.5 w-1.5 rounded-full ${health.groqConfigured ? 'bg-green-500' : 'bg-orange-400'}`} />
+            <span className="text-foreground/70">{health.groqConfigured ? 'AI connected' : 'AI not configured'}</span>
+          </div>
+
+          {health.lastSuccess && (
+            <div className="flex items-center gap-1.5">
+              <div className="h-1.5 w-1.5 rounded-full bg-green-500" />
+              <span className="text-foreground/70">Last run {formatDistanceToNow(new Date(health.lastSuccess))} ago</span>
+            </div>
+          )}
+
+          {health.errorRate > 0 && (
+            <div className="flex items-center gap-1.5">
+              <div className="h-1.5 w-1.5 rounded-full bg-orange-400" />
+              <span className="text-foreground/70">{health.errorRate}% errors</span>
+            </div>
+          )}
+
+          <div className="flex items-center gap-1.5 ml-auto">
+            <Inbox className="h-3.5 w-3.5 text-muted-foreground/60" />
+            <span className="text-foreground/70">
+              {health.queue === 0 ? 'Queue clear' : `${health.queue} waiting`}
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Outcome summary */}
       {status && (
         <section className="space-y-3">
           <Label>Right now</Label>
 
-          {/* Attention statement */}
           <div className={`flex items-start gap-3 px-4 py-3.5 rounded-xl border ${
             status.needsAttention > 0
               ? 'border-orange-200 bg-orange-50/30'
@@ -142,7 +288,6 @@ export default function MissionControlPage() {
             </div>
           </div>
 
-          {/* Tracking statement */}
           {trackingStatement(status) && (
             <div className="flex items-start gap-3 px-4 py-3.5 rounded-xl border bg-card">
               <div className="h-1.5 w-1.5 rounded-full mt-2 flex-shrink-0 bg-blue-400" />
@@ -178,32 +323,12 @@ export default function MissionControlPage() {
         </section>
       )}
 
-      {/* Recent activity — kept as a trust-building audit trail, not metrics */}
+      {/* Audit trail — expandable, shows AI reasoning */}
       {recent.length > 0 && (
         <section>
-          <Label>Recent</Label>
-          <div className="space-y-0.5">
-            {recent.map(job => {
-              const failed = job.status === 'failed'
-              return (
-                <div key={job.id} className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-accent/30 transition-colors">
-                  {failed
-                    ? <AlertTriangle className="h-3.5 w-3.5 text-orange-400 flex-shrink-0" />
-                    : <CheckCircle2 className="h-3.5 w-3.5 text-green-500 flex-shrink-0" />
-                  }
-                  <p className="text-sm flex-1 text-foreground/80">
-                    {failed
-                      ? `Couldn't complete: ${jobLabel(job.type, 'done').toLowerCase()}`
-                      : jobLabel(job.type, 'done')}
-                  </p>
-                  <p className="text-xs text-muted-foreground flex-shrink-0">
-                    {job.completedAt
-                      ? formatDistanceToNow(new Date(job.completedAt)) + ' ago'
-                      : '—'}
-                  </p>
-                </div>
-              )
-            })}
+          <Label>Recent · tap any row to see reasoning</Label>
+          <div className="space-y-1">
+            {recent.map(job => <JobRow key={job.id} job={job} />)}
           </div>
         </section>
       )}
