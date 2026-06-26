@@ -22,11 +22,31 @@ import { registerConnector } from './lib/connector.js'
 import { gmailConnector } from './modules/integrations/gmail.connector.js'
 registerConnector(gmailConnector)
 
-const app = Fastify({ logger: true })
+// ── Startup environment validation ───────────────────────────────────────────
+const isProd = process.env.NODE_ENV === 'production'
+
+function validateEnv() {
+  const jwtSecret = process.env.JWT_SECRET
+  if (isProd && (!jwtSecret || jwtSecret === 'dev_secret_change_me')) {
+    console.error('FATAL: JWT_SECRET must be set to a secure value in production')
+    process.exit(1)
+  }
+  if (isProd && !process.env.FRONTEND_URL) {
+    console.error('FATAL: FRONTEND_URL must be set in production')
+    process.exit(1)
+  }
+  if (!process.env.GROQ_API_KEY) {
+    console.warn('WARNING: GROQ_API_KEY not set — AI features will fail at runtime')
+  }
+}
+
+validateEnv()
+
+const app = Fastify({ logger: { level: process.env.LOG_LEVEL || (isProd ? 'info' : 'debug') } })
 
 // Plugins
 await app.register(cors, {
-  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+  origin: process.env.FRONTEND_URL || (isProd ? false : 'http://localhost:3000'),
   credentials: true,
 })
 await app.register(jwt, { secret: process.env.JWT_SECRET || 'dev_secret_change_me' })
@@ -42,8 +62,18 @@ app.decorate('authenticate', async (req: FastifyRequest, reply: FastifyReply) =>
   }
 })
 
-// Health check
+// Health checks
 app.get('/health', async () => ({ status: 'ok', timestamp: new Date().toISOString() }))
+
+app.get('/health/ready', async (_, reply) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`
+    return { status: 'ready', db: 'ok', timestamp: new Date().toISOString() }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    reply.code(503).send({ status: 'not_ready', db: 'unreachable', error: msg })
+  }
+})
 
 // Routes
 await app.register(authRoutes, { prefix: '/api/auth' })

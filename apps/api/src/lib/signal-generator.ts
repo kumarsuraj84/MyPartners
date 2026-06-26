@@ -11,6 +11,11 @@
 import { prisma } from './prisma.js'
 import { getConfig } from './config.js'
 
+// Throttle signal generation per user — no more than once every 5 minutes.
+// The generator is idempotent so skipping a run loses nothing.
+const lastRun = new Map<string, number>()
+const THROTTLE_MS = 5 * 60 * 1000
+
 interface RawSignal {
   userId: string
   type: string
@@ -25,6 +30,11 @@ interface RawSignal {
 }
 
 export async function generateSignals(userId: string): Promise<{ created: number; reactivated: number }> {
+  const now = Date.now()
+  const last = lastRun.get(userId) ?? 0
+  if (now - last < THROTTLE_MS) return { created: 0, reactivated: 0 }
+  lastRun.set(userId, now)
+
   const [
     urgentUnreadHours,
     waitingForDays,

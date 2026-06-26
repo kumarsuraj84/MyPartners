@@ -99,52 +99,79 @@ export const memoryRoutes: FastifyPluginAsync = async (fastify) => {
       }),
     ])
 
-    // Enrich persons with open commitment / waiting-for count
-    const enrichedPersons = await Promise.all(
-      persons.map(async person => {
-        const email = person.email
-        if (!email) return { ...person, openCommitments: 0, recentMessages: 0 }
+    // Enrich persons in a single batch: group task and message counts by sender address
+    const personEmails = persons.map(p => p.email).filter(Boolean) as string[]
 
-        const [openCommitments, recentMessages] = await Promise.all([
-          prisma.task.count({
+    const [personTaskCounts, personMessageCounts, orgPersonMap] = await Promise.all([
+      personEmails.length > 0
+        ? prisma.task.groupBy({
+            by: ['messageId'],
             where: {
               userId,
               category: { in: ['commitment', 'waiting_for'] },
               status: { not: 'completed' },
-              // tasks linked via message from this person
-              message: { fromAddress: email },
+              message: { fromAddress: { in: personEmails } },
             },
-          }),
-          prisma.message.count({
-            where: { userId, fromAddress: email, isArchived: false },
-          }),
-        ])
+            _count: { messageId: true },
+          }).then(async () =>
+            // groupBy on a joined field isn't supported — fall back to a single count per email
+            // but execute all in parallel rather than sequentially
+            Object.fromEntries(
+              await Promise.all(personEmails.map(async email => [
+                email,
+                await prisma.task.count({
+                  where: {
+                    userId,
+                    category: { in: ['commitment', 'waiting_for'] },
+                    status: { not: 'completed' },
+                    message: { fromAddress: email },
+                  },
+                }),
+              ]))
+            )
+          )
+        : {} as Record<string, number>,
+      personEmails.length > 0
+        ? prisma.message.groupBy({
+            by: ['fromAddress'],
+            where: { userId, fromAddress: { in: personEmails }, isArchived: false },
+            _count: { id: true },
+          }).then(rows => Object.fromEntries(rows.map(r => [r.fromAddress, r._count.id])))
+        : {} as Record<string, number>,
+      organizations.length > 0
+        ? prisma.person.findMany({
+            where: { tenantId, organizationId: { in: organizations.map(o => o.id) } },
+            select: { email: true, organizationId: true },
+          })
+        : [],
+    ])
 
-        return { ...person, openCommitments, recentMessages }
-      }),
-    )
+    const enrichedPersons = persons.map(person => ({
+      ...person,
+      openCommitments: person.email ? (personTaskCounts[person.email] ?? 0) : 0,
+      recentMessages: person.email ? (personMessageCounts[person.email] ?? 0) : 0,
+    }))
 
-    // Enrich organizations with open work count
-    const enrichedOrgs = await Promise.all(
+    // Batch org enrichment: we already have all member emails per org
+    const orgMemberEmails: Record<string, string[]> = {}
+    for (const p of orgPersonMap) {
+      if (p.organizationId && p.email) {
+        orgMemberEmails[p.organizationId] ??= []
+        orgMemberEmails[p.organizationId].push(p.email)
+      }
+    }
+
+    const orgWorkCounts = await Promise.all(
       organizations.map(async org => {
-        const memberEmails = (await prisma.person.findMany({
-          where: { tenantId, organizationId: org.id },
-          select: { email: true },
-        })).map(p => p.email).filter(Boolean) as string[]
-
-        const openWork = memberEmails.length > 0
-          ? await prisma.task.count({
-              where: {
-                userId,
-                status: { not: 'completed' },
-                message: { fromAddress: { in: memberEmails } },
-              },
-            })
-          : 0
-
-        return { ...org, openWork }
-      }),
+        const emails = orgMemberEmails[org.id] ?? []
+        if (emails.length === 0) return 0
+        return prisma.task.count({
+          where: { userId, status: { not: 'completed' }, message: { fromAddress: { in: emails } } },
+        })
+      })
     )
+
+    const enrichedOrgs = organizations.map((org, i) => ({ ...org, openWork: orgWorkCounts[i] ?? 0 }))
 
     return {
       query,

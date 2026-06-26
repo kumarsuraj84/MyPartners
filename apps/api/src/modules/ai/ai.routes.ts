@@ -133,7 +133,7 @@ Return exactly this JSON structure:
           },
           {
             role: 'user',
-            content: `From: ${message.fromName ?? ''} <${message.fromAddress}>\nSubject: ${message.subject ?? ''}\n\n${message.body}`,
+            content: `From: ${message.fromName ?? ''} <${message.fromAddress}>\nSubject: ${message.subject ?? ''}\n\n${message.body.slice(0, 6000)}`,
           },
         ],
         responseFormat: 'json',

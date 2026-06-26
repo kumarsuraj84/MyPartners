@@ -136,7 +136,11 @@ export const briefRoutes: FastifyPluginAsync = async (fastify) => {
     const context = {
       date: new Date().toDateString(),
       unreadMessages,
-      urgentMessages,
+      urgentMessages: urgentMessages.map(m => ({
+        id: m.id, fromName: m.fromName, fromAddress: m.fromAddress,
+        subject: m.subject, summary: m.summary, priority: m.priority,
+        priorityReason: m.priorityReason, messageCategory: m.messageCategory, receivedAt: m.receivedAt,
+      })),
       pendingTasks,
       commitments,
       followUps,
@@ -152,11 +156,36 @@ export const briefRoutes: FastifyPluginAsync = async (fastify) => {
       delta,
     }
 
-    const briefText = await aiService.complete({
-      messages: [
-        {
-          role: 'system',
-          content: `You are a trusted Chief of Staff preparing the executive's morning brief.
+    const fallbackContent: Record<string, unknown> = {
+      greeting: 'Good morning, {name}.',
+      situationSummary: unreadMessages > 0
+        ? [`I've reviewed everything. You have ${unreadMessages} unread message${unreadMessages === 1 ? '' : 's'}${urgentMessages.length > 0 ? `, ${urgentMessages.length} of which need your attention` : ''}.`]
+        : ["I've gone through everything. You're all caught up."],
+      requiresAttention: urgentMessages.slice(0, 3).map(m => ({
+        title: m.subject ?? `Message from ${m.fromName ?? m.fromAddress}`,
+        description: m.summary ?? m.priorityReason ?? 'Marked as urgent.',
+        urgency: m.priority === 'urgent' ? 'critical' : 'high',
+        source: m.fromName ?? m.fromAddress,
+      })),
+      decisionsNeeded: [],
+      newRisks: [],
+      resolvedItems: [],
+      commitmentsSummary: commitments.length > 0 ? `You have ${commitments.length} open commitment${commitments.length === 1 ? '' : 's'}.` : '',
+      followUpsSummary: followUps.length > 0 ? `${followUps.length} follow-up${followUps.length === 1 ? ' is' : 's are'} in motion.` : '',
+      waitingForSummary: waitingFor.length > 0 ? `Waiting on ${waitingFor.length} item${waitingFor.length === 1 ? '' : 's'}.` : '',
+      topPriority: urgentMessages.length > 0
+        ? `Review and respond to urgent message from ${urgentMessages[0].fromName ?? urgentMessages[0].fromAddress}`
+        : overdueCount > 0 ? 'Address overdue items on your task list' : '',
+    }
+
+    let content: Record<string, unknown> = fallbackContent
+
+    try {
+      const briefText = await aiService.complete({
+        messages: [
+          {
+            role: 'system',
+            content: `You are a trusted Chief of Staff preparing the executive's morning brief.
 
 Speak in first person as the assistant ("I've", "I'm tracking", "Everything is organized").
 Never describe what you did. Describe what the executive needs to know.
@@ -189,32 +218,20 @@ Return JSON with exactly these keys:
 - followUpsSummary: string (one sentence — what's in motion, not a count)
 - waitingForSummary: string (one sentence — what's pending from others, without listing names)
 - topPriority: string (single most important thing the executive should do right now, stated as an action)`,
-        },
-        {
-          role: 'user',
-          content: JSON.stringify(context, null, 2),
-        },
-      ],
-      responseFormat: 'json',
-      maxTokens: assistantConfig.maxTokensBrief ?? 2048,
-    })
+          },
+          {
+            role: 'user',
+            content: JSON.stringify(context, null, 2),
+          },
+        ],
+        responseFormat: 'json',
+        maxTokens: assistantConfig.maxTokensBrief ?? 2048,
+      })
 
-    let content: Record<string, unknown>
-    try {
-      content = JSON.parse(briefText)
+      const parsed = JSON.parse(briefText)
+      if (parsed && typeof parsed === 'object') content = parsed
     } catch {
-      content = {
-        greeting: 'Good morning.',
-        situationSummary: ["I've gone through everything. Here's what needs you today."],
-        requiresAttention: [],
-        decisionsNeeded: [],
-        newRisks: [],
-        resolvedItems: [],
-        commitmentsSummary: '',
-        followUpsSummary: '',
-        waitingForSummary: '',
-        topPriority: '',
-      }
+      // AI unavailable or parse failed — fallback content already set above
     }
 
     // Ensure new fields exist even when the AI omits them

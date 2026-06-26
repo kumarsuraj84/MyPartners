@@ -1,16 +1,19 @@
 import type { FastifyPluginAsync } from 'fastify'
+import { z } from 'zod'
 import { prisma } from '../../lib/prisma.js'
 import { generateSignals } from '../../lib/signal-generator.js'
+
+const SnoozeBody = z.object({ hours: z.number().int().min(1).max(168).default(24) })
 
 export const signalsRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.addHook('preHandler', fastify.authenticate)
 
   // Returns active signals, generating fresh ones first.
   // Respects snoozedUntil — snoozed signals are hidden until their snooze expires.
+  // Signal generation is throttled to once per 5 minutes per user.
   fastify.get('/', async (req) => {
     const { userId } = req.user as { userId: string }
 
-    // Run the generator on every fetch — it is idempotent
     await generateSignals(userId)
 
     const now = new Date()
@@ -22,7 +25,6 @@ export const signalsRoutes: FastifyPluginAsync = async (fastify) => {
         OR: [{ snoozedUntil: null }, { snoozedUntil: { lte: now } }],
       },
       orderBy: [
-        // critical first, then high, then normal
         { urgency: 'asc' },
         { createdAt: 'desc' },
       ],
@@ -39,9 +41,9 @@ export const signalsRoutes: FastifyPluginAsync = async (fastify) => {
     reply.code(204)
   })
 
-  fastify.patch<{ Params: { id: string }; Body: { hours?: number } }>('/:id/snooze', async (req, reply) => {
+  fastify.patch<{ Params: { id: string }; Body: unknown }>('/:id/snooze', async (req, reply) => {
     const { userId } = req.user as { userId: string }
-    const hours = (req.body as { hours?: number })?.hours ?? 24
+    const { hours } = SnoozeBody.parse(req.body ?? {})
     const snoozedUntil = new Date(Date.now() + hours * 60 * 60 * 1000)
     await prisma.signal.updateMany({
       where: { id: req.params.id, userId },

@@ -262,6 +262,8 @@ model Message {
   @@unique([integrationId, externalId])
   @@index([userId, receivedAt])
   @@index([userId, priority])
+  @@index([userId, aiProcessed])
+  @@index([userId, isRead, isArchived])
   @@map("messages")
 }
 
@@ -291,6 +293,7 @@ model Task {
   @@index([userId, status])
   @@index([userId, category])
   @@index([userId, dueDate])
+  @@index([userId, category, status])
   @@map("tasks")
 }
 
