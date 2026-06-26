@@ -8,12 +8,12 @@ import {
 import { useAuth } from '@/hooks/use-auth'
 
 const NAV = [
-  { label: 'Home', href: '/', icon: LayoutDashboard },
+  { label: 'Home',            href: '/',                icon: LayoutDashboard },
   { label: 'Mission Control', href: '/mission-control', icon: Zap },
-  { label: 'Feed', href: '/inbox', icon: Inbox },
-  { label: 'Tasks', href: '/tasks', icon: CheckSquare },
-  { label: 'Knowledge', href: '/knowledge', icon: BookOpen },
-  { label: 'Settings', href: '/settings', icon: Settings },
+  { label: 'Feed',            href: '/inbox',           icon: Inbox },
+  { label: 'Tasks',           href: '/tasks',           icon: CheckSquare },
+  { label: 'Knowledge',       href: '/knowledge',       icon: BookOpen },
+  { label: 'Settings',        href: '/settings',        icon: Settings },
 ]
 
 export function Sidebar() {
@@ -21,28 +21,27 @@ export function Sidebar() {
   const { user, logout } = useAuth()
 
   return (
-    <aside className="fixed left-0 top-0 h-screen w-60 border-r bg-card flex flex-col">
-      <div className="px-6 py-5 border-b">
+    <aside className="fixed left-0 top-0 h-screen w-56 border-r bg-card flex flex-col">
+      {/* Logo */}
+      <div className="px-5 py-4 border-b">
         <div className="flex items-center gap-2.5">
-          <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
-            <Zap className="h-4 w-4 text-white" />
+          <div className="h-7 w-7 rounded-lg bg-primary flex items-center justify-center flex-shrink-0">
+            <Zap className="h-3.5 w-3.5 text-white" />
           </div>
-          <div>
-            <p className="text-sm font-semibold">MyPartners</p>
-            <p className="text-xs text-muted-foreground">Executive OS</p>
-          </div>
+          <p className="text-sm font-semibold tracking-tight">MyPartners</p>
         </div>
       </div>
 
-      <nav className="flex-1 px-3 py-4 space-y-0.5">
+      {/* Nav */}
+      <nav className="flex-1 px-2.5 py-3 space-y-0.5">
         {NAV.map(({ label, href, icon: Icon }) => (
           <Link
             key={href}
             href={href}
             className={cn(
-              'flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
+              'flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors',
               pathname === href
-                ? 'bg-primary/10 text-primary'
+                ? 'bg-primary/10 text-primary font-medium'
                 : 'text-muted-foreground hover:bg-accent hover:text-foreground'
             )}
           >
@@ -52,18 +51,20 @@ export function Sidebar() {
         ))}
       </nav>
 
+      {/* User */}
       {user && (
-        <div className="px-3 py-4 border-t">
-          <div className="flex items-center gap-3 px-3 py-2">
-            <div className="h-8 w-8 rounded-full bg-primary/20 flex items-center justify-center text-xs font-semibold text-primary">
+        <div className="px-2.5 py-3 border-t">
+          <div className="flex items-center gap-2.5 px-3 py-2 rounded-lg">
+            <div className="h-6 w-6 rounded-full bg-primary/20 flex items-center justify-center text-[10px] font-bold text-primary flex-shrink-0">
               {user.name.charAt(0).toUpperCase()}
             </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium truncate">{user.name}</p>
-              <p className="text-xs text-muted-foreground truncate">{user.email}</p>
-            </div>
-            <button onClick={logout} className="text-muted-foreground hover:text-foreground">
-              <LogOut className="h-4 w-4" />
+            <p className="text-sm font-medium truncate flex-1 min-w-0">{user.name.split(' ')[0]}</p>
+            <button
+              onClick={logout}
+              className="text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
+              title="Sign out"
+            >
+              <LogOut className="h-3.5 w-3.5" />
             </button>
           </div>
         </div>
