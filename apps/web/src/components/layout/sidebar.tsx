@@ -10,7 +10,7 @@ import { useAuth } from '@/hooks/use-auth'
 const NAV = [
   { label: 'Home', href: '/', icon: LayoutDashboard },
   { label: 'Mission Control', href: '/mission-control', icon: Zap },
-  { label: 'Inbox', href: '/inbox', icon: Inbox },
+  { label: 'Feed', href: '/inbox', icon: Inbox },
   { label: 'Tasks', href: '/tasks', icon: CheckSquare },
   { label: 'Knowledge', href: '/knowledge', icon: BookOpen },
   { label: 'Settings', href: '/settings', icon: Settings },

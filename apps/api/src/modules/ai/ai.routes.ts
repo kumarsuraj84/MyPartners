@@ -10,6 +10,26 @@ export const aiRoutes: FastifyPluginAsync = async (fastify) => {
     return prisma.aIJob.findMany({ where: { userId }, orderBy: { createdAt: 'desc' }, take: 20 })
   })
 
+  fastify.get('/activity', async (req) => {
+    const { userId } = req.user as { userId: string }
+    // Human-readable activity for Mission Control
+    const [jobs, recentMessages, todayTasks] = await Promise.all([
+      prisma.aIJob.findMany({ where: { userId }, orderBy: { createdAt: 'desc' }, take: 10 }),
+      prisma.message.count({ where: { userId, aiProcessed: true } }),
+      prisma.task.count({ where: { userId, createdAt: { gte: new Date(new Date().setHours(0,0,0,0)) } } }),
+    ])
+
+    return {
+      jobs,
+      summary: {
+        messagesProcessed: recentMessages,
+        tasksCreatedToday: todayTasks,
+        activeJobs: jobs.filter(j => j.status === 'running').length,
+        lastActivity: jobs[0]?.createdAt ?? null,
+      },
+    }
+  })
+
   fastify.post('/process-message/:id', async (req) => {
     const { userId } = req.user as { userId: string }
     const { id } = req.params as { id: string }
@@ -24,17 +44,65 @@ export const aiRoutes: FastifyPluginAsync = async (fastify) => {
         messages: [
           {
             role: 'system',
-            content: 'Analyze this message and return JSON with: summary (string), actionItems (array), priority (urgent|high|normal|low), sentiment (positive|neutral|negative), suggestedActions (array of {label, type})',
+            content: `Analyze this message for an executive. Return JSON with:
+- summary: string (2-3 sentence executive summary)
+- actionItems: string[] (specific actions required)
+- priority: 'urgent'|'high'|'normal'|'low'
+- sentiment: 'positive'|'neutral'|'negative'
+- suggestedActions: array of {label: string, type: 'reply'|'delegate'|'schedule'|'follow_up'|'archive'|'create_task', detail?: string}
+- commitments: string[] (things the sender or executive committed to)
+- followUps: string[] (items that need follow-up tracking)
+- waitingFor: string[] (things now pending from someone, include who)`,
           },
-          { role: 'user', content: `From: ${message.fromName} <${message.fromAddress}>\nSubject: ${message.subject}\n\n${message.body}` },
+          {
+            role: 'user',
+            content: `From: ${message.fromName ?? ''} <${message.fromAddress}>\nSubject: ${message.subject ?? ''}\n\n${message.body}`,
+          },
         ],
         responseFormat: 'json',
+        maxTokens: 1024,
       })
 
       let parsed: Record<string, unknown>
       try { parsed = JSON.parse(result) } catch { parsed = { summary: result } }
 
-      await prisma.message.update({ where: { id }, data: { ...parsed, aiProcessed: true } as Record<string, unknown> })
+      // Update message
+      await prisma.message.update({
+        where: { id },
+        data: {
+          summary: parsed.summary as string,
+          actionItems: parsed.actionItems as string[],
+          priority: parsed.priority as string ?? message.priority,
+          sentiment: parsed.sentiment as string,
+          suggestedActions: parsed.suggestedActions as object[],
+          aiProcessed: true,
+        },
+      })
+
+      // Create suggested actions
+      const suggestions = (parsed.suggestedActions as Array<{ label: string; type: string; detail?: string }> | undefined) ?? []
+      if (suggestions.length > 0) {
+        await prisma.suggestedAction.createMany({
+          data: suggestions.map(s => ({ userId, messageId: id, label: s.label, type: s.type, detail: s.detail })),
+        })
+      }
+
+      // Create follow-up tasks
+      const followUps = (parsed.followUps as string[] | undefined) ?? []
+      for (const fu of followUps) {
+        await prisma.task.create({
+          data: { userId, creatorId: userId, messageId: id, title: fu, category: 'follow_up', priority: 'medium' },
+        })
+      }
+
+      // Create waiting-for tasks
+      const waitingFor = (parsed.waitingFor as string[] | undefined) ?? []
+      for (const wf of waitingFor) {
+        await prisma.task.create({
+          data: { userId, creatorId: userId, messageId: id, title: wf, category: 'waiting_for', priority: 'medium', waitingFrom: message.fromName ?? message.fromAddress },
+        })
+      }
+
       await prisma.aIJob.update({
         where: { id: job.id },
         data: { status: 'completed', completedAt: new Date(), output: parsed },
@@ -43,7 +111,10 @@ export const aiRoutes: FastifyPluginAsync = async (fastify) => {
       return { success: true, result: parsed }
     } catch (error) {
       const errMsg = error instanceof Error ? error.message : String(error)
-      await prisma.aIJob.update({ where: { id: job.id }, data: { status: 'failed', completedAt: new Date(), error: errMsg } })
+      await prisma.aIJob.update({
+        where: { id: job.id },
+        data: { status: 'failed', completedAt: new Date(), error: errMsg },
+      })
       throw error
     }
   })

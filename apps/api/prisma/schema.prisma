@@ -15,12 +15,13 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  integrations Integration[]
-  messages     Message[]
-  tasks        Task[]        @relation("TaskAssignee")
-  createdTasks Task[]        @relation("TaskCreator")
-  notes        KnowledgeNote[]
-  aiJobs       AIJob[]
+  integrations     Integration[]
+  messages         Message[]
+  tasks            Task[]        @relation("TaskAssignee")
+  createdTasks     Task[]        @relation("TaskCreator")
+  notes            KnowledgeNote[]
+  aiJobs           AIJob[]
+  suggestedActions SuggestedAction[]
 
   @@map("users")
 }
@@ -69,9 +70,10 @@ model Message {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  integration Integration @relation(fields: [integrationId], references: [id])
-  user        User        @relation(fields: [userId], references: [id])
-  tasks       Task[]
+  integration      Integration       @relation(fields: [integrationId], references: [id])
+  user             User              @relation(fields: [userId], references: [id])
+  tasks            Task[]
+  suggestedActions SuggestedAction[]
 
   @@unique([integrationId, externalId])
   @@index([userId, receivedAt])
@@ -88,7 +90,9 @@ model Task {
   description  String?
   status       String    @default("pending") // pending, in_progress, completed, cancelled
   priority     String    @default("medium")  // urgent, high, medium, low
+  category     String    @default("task")    // task, commitment, follow_up, waiting_for
   dueDate      DateTime?
+  waitingFrom  String?   // person we are waiting on (for waiting_for category)
   completedAt  DateTime?
   assigneeName String?
   tags         String[]  @default([])
@@ -101,8 +105,27 @@ model Task {
   message  Message? @relation(fields: [messageId], references: [id])
 
   @@index([userId, status])
+  @@index([userId, category])
   @@index([userId, dueDate])
   @@map("tasks")
+}
+
+model SuggestedAction {
+  id         String   @id @default(cuid())
+  userId     String
+  messageId  String
+  label      String
+  type       String   // reply, delegate, schedule, follow_up, archive, create_task
+  detail     String?
+  isDismissed Boolean @default(false)
+  isActedOn  Boolean @default(false)
+  createdAt  DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id])
+  message Message @relation(fields: [messageId], references: [id])
+
+  @@index([userId, isDismissed])
+  @@map("suggested_actions")
 }
 
 model KnowledgeNote {

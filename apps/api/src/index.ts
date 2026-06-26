@@ -11,6 +11,7 @@ import { knowledgeRoutes } from './modules/knowledge/knowledge.routes.js'
 import { integrationsRoutes } from './modules/integrations/integrations.routes.js'
 import { briefRoutes } from './modules/brief/brief.routes.js'
 import { aiRoutes } from './modules/ai/ai.routes.js'
+import { actionsRoutes } from './modules/actions/actions.routes.js'
 import { prisma } from './lib/prisma.js'
 
 const app = Fastify({ logger: true })
@@ -44,6 +45,7 @@ await app.register(knowledgeRoutes, { prefix: '/api/knowledge' })
 await app.register(integrationsRoutes, { prefix: '/api/integrations' })
 await app.register(briefRoutes, { prefix: '/api/brief' })
 await app.register(aiRoutes, { prefix: '/api/ai' })
+await app.register(actionsRoutes, { prefix: '/api/actions' })
 
 // Start
 const port = parseInt(process.env.API_PORT || '3001')
