@@ -63,23 +63,65 @@ export const aiRoutes: FastifyPluginAsync = async (fastify) => {
     const message = await prisma.message.findFirstOrThrow({ where: { id, userId } })
 
     const job = await prisma.aIJob.create({
-      data: { userId, type: 'email_processing', status: 'running', startedAt: new Date(), input: { messageId: id } },
+      data: {
+        userId,
+        type: 'email_processing',
+        status: 'running',
+        startedAt: new Date(),
+        input: { messageId: id },
+      },
     })
 
+    // Update job stage for Mission Control visibility
+    const setStage = (stage: string) =>
+      prisma.aIJob.update({ where: { id: job.id }, data: { metadata: { stage } } })
+
     try {
+      await setStage('understanding')
+
       const result = await aiService.complete({
         messages: [
           {
             role: 'system',
-            content: `Analyze this message for an executive. Return JSON with:
-- summary: string (2-3 sentence executive summary)
-- actionItems: string[] (specific actions required)
-- priority: 'urgent'|'high'|'normal'|'low'
-- sentiment: 'positive'|'neutral'|'negative'
-- suggestedActions: array of {label: string, type: 'reply'|'delegate'|'schedule'|'follow_up'|'archive'|'create_task', detail?: string}
-- commitments: string[] (things the sender or executive committed to)
-- followUps: string[] (items that need follow-up tracking)
-- waitingFor: string[] (things now pending from someone, include who)`,
+            content: `You are a Chief of Staff processing business communication through an intelligence pipeline.
+
+PIPELINE STAGES — follow each in order, thinking step by step before returning JSON:
+
+UNDERSTAND: What is this message really about? What is the business context? Who is the sender and what is their likely relationship to the executive?
+
+CLASSIFY: What type of communication is this? Choose one: request, update, fyi, decision, commitment, introduction. What makes it worth the executive's attention — or not?
+
+EXTRACT: Pull out every concrete item:
+- Action items the executive must do
+- Commitments made by the sender OR the executive
+- Follow-ups that need tracking
+- Items the executive is now waiting for from someone
+- Named entities: people, companies, projects, amounts, deadlines
+
+RELATE: Does this connect to ongoing work? Is this a reply? Is there an implicit deadline or urgency not stated directly?
+
+PRIORITIZE: Assign priority (urgent|high|normal|low) and explain specifically WHY in one sentence. Urgent = requires action today. High = requires action this week. Be conservative — most messages are normal.
+
+RECOMMEND: Suggest 2-4 specific actions. Labels should sound like executive decisions ("Reply and approve", "Delegate to team", "Schedule call", "No action needed"), not software buttons.
+
+REMEMBER: Identify 0-2 pieces of information worth storing permanently as business context (key decisions, vendor details, project context, new contacts). Only include genuinely important context, not routine information.
+
+Return exactly this JSON structure:
+{
+  "summary": "2-3 sentence executive summary of what happened and what it means",
+  "whyItMatters": "1 sentence — why this matters to the executive specifically",
+  "messageCategory": "request|update|fyi|decision|commitment|introduction",
+  "priority": "urgent|high|normal|low",
+  "priorityReason": "specific reason for this priority level",
+  "sentiment": "positive|neutral|negative",
+  "actionItems": ["string"],
+  "commitments": ["string"],
+  "followUps": ["string"],
+  "waitingFor": ["string — include who"],
+  "suggestedActions": [{"label": "string", "type": "reply|delegate|schedule|follow_up|archive|create_task", "detail": "string"}],
+  "entities": [{"name": "string", "type": "person|company|project|amount|date", "context": "string"}],
+  "memoryItems": [{"title": "string", "type": "note|decision|vendor|project|contact", "content": "string"}]
+}`,
           },
           {
             role: 'user',
@@ -87,30 +129,41 @@ export const aiRoutes: FastifyPluginAsync = async (fastify) => {
           },
         ],
         responseFormat: 'json',
-        maxTokens: 1024,
+        maxTokens: 1500,
       })
 
       let parsed: Record<string, unknown>
       try { parsed = JSON.parse(result) } catch { parsed = { summary: result } }
 
-      // Update message
+      await setStage('extracting')
+
+      // Update message with enriched intelligence
       await prisma.message.update({
         where: { id },
         data: {
           summary: parsed.summary as string,
           actionItems: parsed.actionItems as string[],
-          priority: parsed.priority as string ?? message.priority,
+          priority: (parsed.priority as string) ?? message.priority,
+          priorityReason: parsed.priorityReason as string,
+          messageCategory: parsed.messageCategory as string,
           sentiment: parsed.sentiment as string,
-          suggestedActions: parsed.suggestedActions as object[],
           aiProcessed: true,
+          metadata: {
+            whyItMatters: parsed.whyItMatters,
+            entities: parsed.entities ?? [],
+          },
         },
       })
+
+      await setStage('recording')
 
       // Create suggested actions
       const suggestions = (parsed.suggestedActions as Array<{ label: string; type: string; detail?: string }> | undefined) ?? []
       if (suggestions.length > 0) {
         await prisma.suggestedAction.createMany({
-          data: suggestions.map(s => ({ userId, messageId: id, label: s.label, type: s.type, detail: s.detail })),
+          data: suggestions.map(s => ({
+            userId, messageId: id, label: s.label, type: s.type, detail: s.detail,
+          })),
         })
       }
 
@@ -126,13 +179,33 @@ export const aiRoutes: FastifyPluginAsync = async (fastify) => {
       const waitingFor = (parsed.waitingFor as string[] | undefined) ?? []
       for (const wf of waitingFor) {
         await prisma.task.create({
-          data: { userId, creatorId: userId, messageId: id, title: wf, category: 'waiting_for', priority: 'medium', waitingFrom: message.fromName ?? message.fromAddress },
+          data: {
+            userId, creatorId: userId, messageId: id, title: wf,
+            category: 'waiting_for', priority: 'medium',
+            waitingFrom: message.fromName ?? message.fromAddress,
+          },
+        })
+      }
+
+      await setStage('remembering')
+
+      // Auto-remember: store important context in Memory
+      const memoryItems = (parsed.memoryItems as Array<{ title: string; type: string; content: string }> | undefined) ?? []
+      for (const item of memoryItems) {
+        await prisma.knowledgeNote.create({
+          data: {
+            userId,
+            title: item.title,
+            type: item.type,
+            content: item.content,
+            tags: [message.fromName ?? message.fromAddress, ...(message.subject ? [message.subject] : [])].filter(Boolean),
+          },
         })
       }
 
       await prisma.aIJob.update({
         where: { id: job.id },
-        data: { status: 'completed', completedAt: new Date(), output: parsed },
+        data: { status: 'completed', completedAt: new Date(), output: parsed, metadata: { stage: 'complete' } },
       })
 
       return { success: true, result: parsed }

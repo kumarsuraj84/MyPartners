@@ -60,15 +60,17 @@ model Message {
   receivedAt    DateTime
   isRead        Boolean  @default(false)
   isArchived    Boolean  @default(false)
-  priority      String   @default("normal") // urgent, high, normal, low
-  sentiment     String?  // positive, neutral, negative
-  actionItems   Json?    // array of detected action items
-  suggestedActions Json? // array of suggested next actions
-  labels        String[] @default([])
-  threadId      String?
-  aiProcessed   Boolean  @default(false)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  priority         String   @default("normal") // urgent, high, normal, low
+  priorityReason   String?  // why the AI assigned this priority
+  messageCategory  String?  // request, update, fyi, decision, commitment, introduction
+  sentiment        String?  // positive, neutral, negative
+  actionItems      Json?    // array of detected action items
+  labels           String[] @default([])
+  threadId         String?
+  aiProcessed      Boolean  @default(false)
+  metadata         Json?    // entities, key dates, and other extracted structured data
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
   integration      Integration       @relation(fields: [integrationId], references: [id])
   user             User              @relation(fields: [userId], references: [id])
@@ -153,6 +155,7 @@ model AIJob {
   status      String    @default("pending") // pending, running, completed, failed
   input       Json?
   output      Json?
+  metadata    Json?     // pipeline stage tracking and extra context
   error       String?
   startedAt   DateTime?
   completedAt DateTime?

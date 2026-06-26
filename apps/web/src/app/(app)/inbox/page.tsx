@@ -7,6 +7,10 @@ import { Button } from '@/components/ui/button'
 import { Zap, Archive, ChevronDown, ChevronUp, Search, CheckCircle2, ArrowRight } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 
+interface SuggestedAction {
+  id: string; label: string; type: string; detail?: string
+}
+
 interface Message {
   id: string
   fromName?: string
@@ -15,26 +19,43 @@ interface Message {
   body: string
   summary?: string
   priority: string
+  priorityReason?: string
+  messageCategory?: string
   isRead: boolean
   isArchived: boolean
   receivedAt: string
   provider: string
   actionItems?: string[]
-  suggestedActions?: { label: string; type: string; detail?: string }[]
+  metadata?: { whyItMatters?: string; entities?: Array<{ name: string; type: string; context: string }> }
   aiProcessed: boolean
+  suggestedActions: SuggestedAction[]
 }
 
 interface MessagesResponse {
   messages: Message[]; total: number
 }
 
-const PRIORITY_VARIANTS: Record<string, 'urgent' | 'high' | 'normal' | 'low'> = {
-  urgent: 'urgent', high: 'high', normal: 'normal', low: 'low',
-}
-
 const PRIORITY_ORDER: Record<string, number> = { urgent: 0, high: 1, normal: 2, low: 3 }
 
-export default function InboxPage() {
+const CATEGORY_LABELS: Record<string, string> = {
+  request: 'Request',
+  update: 'Update',
+  fyi: 'FYI',
+  decision: 'Decision',
+  commitment: 'Commitment',
+  introduction: 'Introduction',
+}
+
+const ACTION_VERB: Record<string, string> = {
+  reply: 'Reply',
+  delegate: 'Delegate',
+  schedule: 'Schedule',
+  follow_up: 'Track',
+  archive: 'Done with this',
+  create_task: 'Add to work',
+}
+
+export default function CommunicationPage() {
   const qc = useQueryClient()
   const [search, setSearch] = useState('')
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
@@ -52,17 +73,32 @@ export default function InboxPage() {
 
   const archive = useMutation({
     mutationFn: (id: string) => api.patch(`/api/messages/${id}/archive`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['messages'] }),
-  })
-
-  const summarize = useMutation({
-    mutationFn: (id: string) => api.post(`/api/messages/${id}/summarize`),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['messages'] }); qc.invalidateQueries({ queryKey: ['brief'] }) },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['messages'] })
+      qc.invalidateQueries({ queryKey: ['ai', 'activity'] })
+    },
   })
 
   const processAI = useMutation({
     mutationFn: (id: string) => api.post(`/api/ai/process-message/${id}`),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['messages'] }); qc.invalidateQueries({ queryKey: ['actions'] }) },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['messages'] })
+      qc.invalidateQueries({ queryKey: ['actions'] })
+      qc.invalidateQueries({ queryKey: ['brief'] })
+    },
+  })
+
+  const dismissAction = useMutation({
+    mutationFn: (id: string) => api.patch(`/api/actions/${id}/dismiss`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['messages'] }),
+  })
+
+  const actOnAction = useMutation({
+    mutationFn: (id: string) => api.patch(`/api/actions/${id}/act`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['messages'] })
+      qc.invalidateQueries({ queryKey: ['actions'] })
+    },
   })
 
   const toggleExpand = (id: string, msg: Message) => {
@@ -80,7 +116,6 @@ export default function InboxPage() {
     setShowBody(next)
   }
 
-  // Sort: unread urgent first, then by priority
   const messages = [...(data?.messages ?? [])].sort((a, b) => {
     if (!a.isRead && b.isRead) return -1
     if (a.isRead && !b.isRead) return 1
@@ -130,6 +165,7 @@ export default function InboxPage() {
           {messages.map(msg => {
             const isOpen = expanded.has(msg.id)
             const seeingBody = showBody.has(msg.id)
+            const whyItMatters = msg.metadata?.whyItMatters
 
             return (
               <div
@@ -144,55 +180,79 @@ export default function InboxPage() {
                     : 'border-border bg-card'
                 } ${!msg.isRead ? 'shadow-sm' : ''}`}
               >
-                {/* Message header — always visible */}
+                {/* Header */}
                 <button
                   className="w-full text-left p-4 flex items-start gap-3"
                   onClick={() => toggleExpand(msg.id, msg)}
                 >
-                  {/* Unread indicator */}
-                  <div className={`h-2 w-2 rounded-full mt-1.5 flex-shrink-0 ${!msg.isRead ? (msg.priority === 'urgent' ? 'bg-red-500' : msg.priority === 'high' ? 'bg-orange-500' : 'bg-blue-500') : 'bg-transparent'}`} />
+                  <div className={`h-2 w-2 rounded-full mt-1.5 flex-shrink-0 ${
+                    !msg.isRead
+                      ? msg.priority === 'urgent' ? 'bg-red-500'
+                      : msg.priority === 'high' ? 'bg-orange-500'
+                      : 'bg-blue-500'
+                    : 'bg-transparent'
+                  }`} />
 
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-0.5">
+                    <div className="flex items-center gap-2 mb-0.5 flex-wrap">
                       <span className={`text-sm ${!msg.isRead ? 'font-semibold' : 'font-medium'}`}>
                         {msg.fromName || msg.fromAddress}
                       </span>
-                      <Badge variant={PRIORITY_VARIANTS[msg.priority]} className="text-[10px] px-1.5 py-0">
-                        {msg.priority}
-                      </Badge>
+
+                      {/* Message category — what kind of communication */}
+                      {msg.messageCategory && CATEGORY_LABELS[msg.messageCategory] && (
+                        <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
+                          {CATEGORY_LABELS[msg.messageCategory]}
+                        </span>
+                      )}
+
+                      {/* Priority — only show urgent/high */}
+                      {(msg.priority === 'urgent' || msg.priority === 'high') && (
+                        <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${
+                          msg.priority === 'urgent' ? 'text-red-700 bg-red-100' : 'text-orange-700 bg-orange-100'
+                        }`}>
+                          {msg.priority}
+                        </span>
+                      )}
+
                       <span className="ml-auto text-xs text-muted-foreground flex-shrink-0">
                         {formatDistanceToNow(new Date(msg.receivedAt))} ago
                       </span>
                     </div>
+
                     <p className={`text-sm ${!msg.isRead ? 'text-foreground' : 'text-muted-foreground'} truncate`}>
                       {msg.subject ?? '(no subject)'}
                     </p>
 
-                    {/* Show summary preview when collapsed */}
+                    {/* Summary preview when collapsed */}
                     {!isOpen && msg.summary && (
                       <p className="text-xs text-muted-foreground mt-1 line-clamp-1">{msg.summary}</p>
                     )}
+
+                    {/* Why it matters — show collapsed if not processed yet */}
+                    {!isOpen && !msg.aiProcessed && (
+                      <p className="text-xs text-muted-foreground/60 mt-1 italic">Not yet reviewed by your assistant</p>
+                    )}
                   </div>
 
-                  {isOpen ? <ChevronUp className="h-4 w-4 text-muted-foreground flex-shrink-0 mt-0.5" /> : <ChevronDown className="h-4 w-4 text-muted-foreground flex-shrink-0 mt-0.5" />}
+                  {isOpen
+                    ? <ChevronUp className="h-4 w-4 text-muted-foreground flex-shrink-0 mt-0.5" />
+                    : <ChevronDown className="h-4 w-4 text-muted-foreground flex-shrink-0 mt-0.5" />
+                  }
                 </button>
 
                 {/* Expanded content */}
                 {isOpen && (
                   <div className="px-4 pb-4 space-y-4 border-t pt-3">
-                    {/* AI Summary — primary content */}
-                    {msg.summary ? (
-                      <div>
-                        <p className="text-[11px] font-semibold text-muted-foreground/70 uppercase tracking-wider mb-1.5">Why it matters</p>
-                        <p className="text-sm leading-relaxed">{msg.summary}</p>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-2 text-muted-foreground">
-                        <p className="text-sm text-muted-foreground">Your assistant hasn't reviewed this yet.</p>
+
+                    {/* Not yet processed */}
+                    {!msg.aiProcessed ? (
+                      <div className="flex items-center gap-3">
+                        <p className="text-sm text-muted-foreground flex-1">Your assistant hasn't reviewed this yet.</p>
                         <Button
                           size="sm"
                           variant="outline"
-                          className="h-7 text-xs"
+                          className="h-7 text-xs flex-shrink-0"
                           onClick={() => processAI.mutate(msg.id)}
                           disabled={processAI.isPending}
                         >
@@ -200,38 +260,75 @@ export default function InboxPage() {
                           {processAI.isPending ? 'Reviewing…' : 'Review now'}
                         </Button>
                       </div>
+                    ) : (
+                      <>
+                        {/* Why it matters */}
+                        {whyItMatters && (
+                          <div>
+                            <p className="text-[11px] font-semibold text-muted-foreground/70 uppercase tracking-wider mb-1.5">Why it matters</p>
+                            <p className="text-sm leading-relaxed text-foreground/90">{whyItMatters}</p>
+                          </div>
+                        )}
+
+                        {/* Summary */}
+                        {msg.summary && (
+                          <div>
+                            <p className="text-[11px] font-semibold text-muted-foreground/70 uppercase tracking-wider mb-1.5">Summary</p>
+                            <p className="text-sm leading-relaxed">{msg.summary}</p>
+                          </div>
+                        )}
+
+                        {/* Priority reason — only show if flagged high/urgent */}
+                        {msg.priorityReason && (msg.priority === 'urgent' || msg.priority === 'high') && (
+                          <div className={`flex items-start gap-2 px-3 py-2.5 rounded-lg text-xs ${
+                            msg.priority === 'urgent' ? 'bg-red-50 text-red-700' : 'bg-orange-50 text-orange-700'
+                          }`}>
+                            <span className="font-semibold flex-shrink-0">Why urgent:</span>
+                            <span>{msg.priorityReason}</span>
+                          </div>
+                        )}
+
+                        {/* Action items */}
+                        {(msg.actionItems as string[] | undefined)?.length ? (
+                          <div>
+                            <p className="text-[11px] font-semibold text-muted-foreground/70 uppercase tracking-wider mb-1.5">Needs action</p>
+                            <ul className="space-y-1">
+                              {(msg.actionItems as string[]).map((item, i) => (
+                                <li key={i} className="flex items-start gap-2 text-sm">
+                                  <ArrowRight className="h-3.5 w-3.5 text-primary mt-0.5 flex-shrink-0" />
+                                  {item}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        ) : null}
+
+                        {/* Suggested actions from intelligence pipeline */}
+                        {msg.suggestedActions.length > 0 && (
+                          <div className="flex flex-wrap gap-2">
+                            {msg.suggestedActions.map(action => (
+                              <div key={action.id} className="flex items-center gap-1">
+                                <button
+                                  onClick={() => dismissAction.mutate(action.id)}
+                                  className="h-7 px-2 rounded-l-lg border text-xs text-muted-foreground hover:bg-accent transition-colors border-r-0"
+                                  title="Dismiss"
+                                >
+                                  ×
+                                </button>
+                                <button
+                                  onClick={() => actOnAction.mutate(action.id)}
+                                  className="h-7 px-3 rounded-r-lg border text-xs font-medium hover:bg-accent transition-colors"
+                                >
+                                  {action.label || ACTION_VERB[action.type] || 'Act'}
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </>
                     )}
 
-                    {/* Action items */}
-                    {(msg.actionItems as string[] | undefined)?.length ? (
-                      <div>
-                        <p className="text-[11px] font-semibold text-muted-foreground/70 uppercase tracking-wider mb-1.5">Needs action</p>
-                        <ul className="space-y-1">
-                          {(msg.actionItems as string[]).map((item, i) => (
-                            <li key={i} className="flex items-start gap-2 text-sm">
-                              <ArrowRight className="h-3.5 w-3.5 text-primary mt-0.5 flex-shrink-0" />
-                              {item}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    ) : null}
-
-                    {/* Suggested actions */}
-                    {(msg.suggestedActions as Array<{ label: string; type: string }> | undefined)?.length ? (
-                      <div className="flex flex-wrap gap-2">
-                        {(msg.suggestedActions as Array<{ label: string; type: string }>).map((action, i) => (
-                          <button
-                            key={i}
-                            className="px-3 py-1.5 rounded-lg border text-xs font-medium hover:bg-accent transition-colors"
-                          >
-                            {action.label}
-                          </button>
-                        ))}
-                      </div>
-                    ) : null}
-
-                    {/* Toggle raw body */}
+                    {/* Full message toggle */}
                     <div>
                       <button
                         onClick={() => toggleBody(msg.id)}
@@ -247,7 +344,7 @@ export default function InboxPage() {
                       )}
                     </div>
 
-                    {/* Footer actions */}
+                    {/* Footer */}
                     <div className="flex gap-2 pt-1">
                       <Button
                         size="sm"

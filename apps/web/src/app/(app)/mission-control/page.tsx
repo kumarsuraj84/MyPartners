@@ -16,6 +16,15 @@ interface ActivityJob {
   error?: string
   input?: Record<string, unknown>
   output?: Record<string, unknown>
+  metadata?: { stage?: string }
+}
+
+const STAGE_LABELS: Record<string, string> = {
+  understanding: 'Understanding the message…',
+  extracting:    'Extracting commitments and actions…',
+  recording:     'Recording tasks and suggestions…',
+  remembering:   'Storing important context…',
+  complete:      'Done',
 }
 
 interface ActivityData {
@@ -312,7 +321,11 @@ export default function MissionControlPage() {
               return (
                 <div key={job.id} className="flex items-center gap-3 px-4 py-3.5 rounded-xl border border-blue-100 bg-blue-50/30">
                   <Icon className="h-4 w-4 text-blue-500 animate-pulse-soft flex-shrink-0" />
-                  <p className="text-sm font-medium flex-1">{jobLabel(job.type, 'doing')}</p>
+                  <p className="text-sm font-medium flex-1">
+                    {job.metadata?.stage && STAGE_LABELS[job.metadata.stage]
+                      ? STAGE_LABELS[job.metadata.stage]
+                      : jobLabel(job.type, 'doing')}
+                  </p>
                   <div className="h-1 w-14 bg-blue-100 rounded-full overflow-hidden flex-shrink-0">
                     <div className="h-full w-3/4 bg-blue-400 rounded-full animate-pulse" />
                   </div>

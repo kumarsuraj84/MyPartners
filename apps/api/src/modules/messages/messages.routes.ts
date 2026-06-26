@@ -12,6 +12,14 @@ const QuerySchema = z.object({
   search: z.string().optional(),
 })
 
+// Include pending suggested actions inline with every message
+const WITH_SUGGESTIONS = {
+  suggestedActions: {
+    where: { isDismissed: false, isActedOn: false },
+    orderBy: { createdAt: 'asc' as const },
+  },
+}
+
 export const messagesRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.addHook('preHandler', fastify.authenticate)
 
@@ -21,7 +29,7 @@ export const messagesRoutes: FastifyPluginAsync = async (fastify) => {
     const { page, limit, priority, provider, unread, search } = query
     const skip = (page - 1) * limit
 
-    const where: Record<string, unknown> = { userId }
+    const where: Record<string, unknown> = { userId, isArchived: false }
     if (priority) where.priority = priority
     if (provider) where.provider = provider
     if (unread !== undefined) where.isRead = !unread
@@ -30,10 +38,17 @@ export const messagesRoutes: FastifyPluginAsync = async (fastify) => {
       { fromName: { contains: search, mode: 'insensitive' } },
       { fromAddress: { contains: search, mode: 'insensitive' } },
       { summary: { contains: search, mode: 'insensitive' } },
+      { body: { contains: search, mode: 'insensitive' } },
     ]
 
     const [messages, total] = await Promise.all([
-      prisma.message.findMany({ where, orderBy: { receivedAt: 'desc' }, skip, take: limit }),
+      prisma.message.findMany({
+        where,
+        orderBy: { receivedAt: 'desc' },
+        skip,
+        take: limit,
+        include: WITH_SUGGESTIONS,
+      }),
       prisma.message.count({ where }),
     ])
 
@@ -43,7 +58,7 @@ export const messagesRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get('/:id', async (req) => {
     const { userId } = req.user as { userId: string }
     const { id } = req.params as { id: string }
-    return prisma.message.findFirstOrThrow({ where: { id, userId } })
+    return prisma.message.findFirstOrThrow({ where: { id, userId }, include: WITH_SUGGESTIONS })
   })
 
   fastify.patch('/:id/read', async (req) => {
@@ -58,32 +73,70 @@ export const messagesRoutes: FastifyPluginAsync = async (fastify) => {
     return prisma.message.update({ where: { id, userId }, data: { isArchived: true } })
   })
 
+  // Quick review — same full pipeline, called from "Review now" button
   fastify.post('/:id/summarize', async (req) => {
     const { userId } = req.user as { userId: string }
     const { id } = req.params as { id: string }
     const message = await prisma.message.findFirstOrThrow({ where: { id, userId } })
 
-    const summary = await aiService.complete({
+    const result = await aiService.complete({
       messages: [
-        { role: 'system', content: 'You are an executive assistant. Summarize this email concisely in 2-3 sentences. Extract any action items as a JSON array under "actionItems". Return JSON with keys: summary (string), actionItems (array of strings), priority (urgent|high|normal|low), sentiment (positive|neutral|negative).' },
-        { role: 'user', content: `Subject: ${message.subject}\nFrom: ${message.fromName} <${message.fromAddress}>\n\n${message.body}` },
+        {
+          role: 'system',
+          content: `You are a Chief of Staff reviewing business communication.
+
+Analyze this message and return exactly this JSON:
+{
+  "summary": "2-3 sentence executive summary",
+  "whyItMatters": "1 sentence — why this matters to the executive",
+  "messageCategory": "request|update|fyi|decision|commitment|introduction",
+  "priority": "urgent|high|normal|low",
+  "priorityReason": "specific reason for this priority level",
+  "sentiment": "positive|neutral|negative",
+  "actionItems": ["string"],
+  "suggestedActions": [{"label": "string", "type": "reply|delegate|schedule|follow_up|archive|create_task", "detail": "string"}]
+}
+
+Action labels should sound like executive decisions, not software buttons.
+Be conservative with priority — most messages are normal.`,
+        },
+        {
+          role: 'user',
+          content: `From: ${message.fromName ?? ''} <${message.fromAddress}>\nSubject: ${message.subject ?? ''}\n\n${message.body}`,
+        },
       ],
       responseFormat: 'json',
+      maxTokens: 800,
     })
 
     let parsed: Record<string, unknown>
-    try { parsed = JSON.parse(summary) } catch { parsed = { summary, actionItems: [] } }
+    try { parsed = JSON.parse(result) } catch { parsed = { summary: result, actionItems: [] } }
 
-    return prisma.message.update({
+    const updated = await prisma.message.update({
       where: { id },
       data: {
         summary: parsed.summary as string,
         actionItems: parsed.actionItems as string[],
         priority: (parsed.priority as string) ?? message.priority,
+        priorityReason: parsed.priorityReason as string,
+        messageCategory: parsed.messageCategory as string,
         sentiment: parsed.sentiment as string,
         aiProcessed: true,
+        metadata: { whyItMatters: parsed.whyItMatters },
       },
+      include: WITH_SUGGESTIONS,
     })
+
+    // Create suggested actions (remove stale ones first)
+    await prisma.suggestedAction.deleteMany({ where: { messageId: id, isDismissed: false, isActedOn: false } })
+    const suggestions = (parsed.suggestedActions as Array<{ label: string; type: string; detail?: string }> | undefined) ?? []
+    if (suggestions.length > 0) {
+      await prisma.suggestedAction.createMany({
+        data: suggestions.map(s => ({ userId, messageId: id, label: s.label, type: s.type, detail: s.detail })),
+      })
+    }
+
+    return prisma.message.findFirstOrThrow({ where: { id }, include: WITH_SUGGESTIONS })
   })
 
   fastify.get('/stats/overview', async (req) => {
