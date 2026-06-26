@@ -93,7 +93,7 @@ export default function InboxPage() {
   return (
     <div className="animate-fade-in max-w-2xl space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Feed</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Communication</h1>
         <p className="text-muted-foreground mt-0.5 text-sm">
           {urgentCount > 0
             ? `${urgentCount} urgent · ${unreadCount} need your attention`
@@ -183,7 +183,7 @@ export default function InboxPage() {
                     {/* AI Summary — primary content */}
                     {msg.summary ? (
                       <div>
-                        <p className="text-[11px] font-semibold text-muted-foreground/70 uppercase tracking-wider mb-1.5">What you need to know</p>
+                        <p className="text-[11px] font-semibold text-muted-foreground/70 uppercase tracking-wider mb-1.5">Why it matters</p>
                         <p className="text-sm leading-relaxed">{msg.summary}</p>
                       </div>
                     ) : (

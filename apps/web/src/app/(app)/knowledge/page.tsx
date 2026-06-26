@@ -44,8 +44,8 @@ export default function KnowledgePage() {
     <div className="animate-fade-in space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold">Knowledge</h1>
-          <p className="text-muted-foreground mt-1">Meetings, decisions, vendors, projects</p>
+          <h1 className="text-2xl font-semibold">Memory</h1>
+          <p className="text-muted-foreground mt-1">Conversations, meetings, decisions, vendors, projects</p>
         </div>
         <Button onClick={() => setShowNew(true)}><Plus className="h-4 w-4 mr-2" />Add Note</Button>
       </div>

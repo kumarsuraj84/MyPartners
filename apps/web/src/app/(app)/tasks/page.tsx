@@ -2,8 +2,8 @@
 import { useState, useRef, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
-import { CheckCircle2, Circle, Plus } from 'lucide-react'
-import { format, isPast, isToday } from 'date-fns'
+import { CheckCircle2, Circle, Plus, ArrowRight } from 'lucide-react'
+import { format, isPast, isToday, formatDistanceToNow } from 'date-fns'
 
 interface Task {
   id: string
@@ -15,44 +15,80 @@ interface Task {
   dueDate?: string
   assigneeName?: string
   waitingFrom?: string
+  createdAt: string
+  updatedAt: string
 }
 
-const TABS = [
-  { key: 'task',        label: 'My Tasks' },
-  { key: 'commitment',  label: 'Commitments' },
-  { key: 'follow_up',   label: 'Follow-ups' },
-  { key: 'waiting_for', label: 'Waiting for' },
+const SECTIONS = [
+  { key: 'needs_me',   label: 'Needs Me' },
+  { key: 'waiting',    label: 'Waiting For' },
+  { key: 'delegated',  label: 'Delegated' },
+  { key: 'completed',  label: 'Completed' },
 ] as const
 
-type TabKey = typeof TABS[number]['key']
+type SectionKey = typeof SECTIONS[number]['key']
 
-const EMPTY: Record<TabKey, string> = {
-  task:        'No tasks. Add one above.',
-  commitment:  'No pending commitments.',
-  follow_up:   'Nothing being tracked.',
-  waiting_for: 'Nothing pending from others.',
+// Map PRD sections to backend category filters
+const SECTION_EMPTY: Record<SectionKey, string> = {
+  needs_me:  'Nothing needs you right now.',
+  waiting:   'Nothing pending from others.',
+  delegated: 'No follow-ups being tracked.',
+  completed: 'Nothing completed yet.',
 }
 
-export default function TasksPage() {
+function suggestedNextAction(task: Task): string | null {
+  if (task.status === 'in_progress') return 'In progress — check for updates'
+  if (task.category === 'commitment' && task.dueDate && isPast(new Date(task.dueDate))) return 'Overdue — act now'
+  if (task.category === 'commitment') return 'Review and act'
+  if (task.category === 'waiting_for') return `Follow up with ${task.waitingFrom ?? 'them'}`
+  if (task.category === 'follow_up') return 'Check if done'
+  if (task.dueDate && isToday(new Date(task.dueDate))) return 'Due today'
+  return null
+}
+
+export default function WorkPage() {
   const qc = useQueryClient()
-  const [tab, setTab] = useState<TabKey>('task')
+  const [section, setSection] = useState<SectionKey>('needs_me')
   const [adding, setAdding] = useState(false)
   const [draft, setDraft] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
 
-  const { data: tasks = [], isLoading } = useQuery<Task[]>({
-    queryKey: ['tasks', tab],
-    queryFn: () => api.get(`/api/tasks?category=${tab}`),
+  // Needs Me = tasks + commitments (active)
+  const { data: myTasks = [] } = useQuery<Task[]>({
+    queryKey: ['tasks', 'task'],
+    queryFn: () => api.get('/api/tasks?category=task'),
+    enabled: section === 'needs_me',
+  })
+  const { data: commitments = [] } = useQuery<Task[]>({
+    queryKey: ['tasks', 'commitment'],
+    queryFn: () => api.get('/api/tasks?category=commitment'),
+    enabled: section === 'needs_me',
   })
 
-  const { data: completed = [] } = useQuery<Task[]>({
-    queryKey: ['tasks', tab, 'completed'],
-    queryFn: () => api.get(`/api/tasks?category=${tab}&status=completed`),
+  // Waiting For
+  const { data: waitingFor = [] } = useQuery<Task[]>({
+    queryKey: ['tasks', 'waiting_for'],
+    queryFn: () => api.get('/api/tasks?category=waiting_for'),
+    enabled: section === 'waiting',
+  })
+
+  // Delegated = follow-ups
+  const { data: followUps = [] } = useQuery<Task[]>({
+    queryKey: ['tasks', 'follow_up'],
+    queryFn: () => api.get('/api/tasks?category=follow_up'),
+    enabled: section === 'delegated',
+  })
+
+  // Completed (all categories, last 20)
+  const { data: completedItems = [] } = useQuery<Task[]>({
+    queryKey: ['tasks', 'completed'],
+    queryFn: () => api.get('/api/tasks?status=completed'),
+    enabled: section === 'completed',
   })
 
   const createTask = useMutation({
     mutationFn: (title: string) =>
-      api.post('/api/tasks', { title, category: tab, priority: 'medium' }),
+      api.post('/api/tasks', { title, category: 'task', priority: 'medium' }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['tasks'] })
       setDraft('')
@@ -71,48 +107,56 @@ export default function TasksPage() {
   }, [adding])
 
   const handleKey = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && draft.trim()) {
-      createTask.mutate(draft.trim())
-    }
-    if (e.key === 'Escape') {
-      setAdding(false)
-      setDraft('')
-    }
+    if (e.key === 'Enter' && draft.trim()) createTask.mutate(draft.trim())
+    if (e.key === 'Escape') { setAdding(false); setDraft('') }
   }
 
-  const active = tasks.filter(t => t.status !== 'completed')
-  const recentCompleted = completed.slice(0, 3)
+  let items: Task[] = []
+  if (section === 'needs_me') {
+    items = [...myTasks, ...commitments].filter(t => t.status !== 'completed')
+    items.sort((a, b) => {
+      const po: Record<string, number> = { urgent: 0, high: 1, medium: 2, low: 3 }
+      return (po[a.priority] ?? 2) - (po[b.priority] ?? 2)
+    })
+  } else if (section === 'waiting') {
+    items = waitingFor.filter(t => t.status !== 'completed')
+  } else if (section === 'delegated') {
+    items = followUps.filter(t => t.status !== 'completed')
+  } else if (section === 'completed') {
+    items = completedItems.slice(0, 20)
+  }
+
+  const totalNeeds = [...myTasks, ...commitments].filter(t => t.status !== 'completed').length
 
   return (
     <div className="animate-fade-in max-w-2xl space-y-6 pb-16">
 
-      {/* Header */}
       <div className="flex items-baseline justify-between">
-        <h1 className="text-2xl font-semibold tracking-tight">Tasks</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Work</h1>
         <p className="text-sm text-muted-foreground">
-          {active.length > 0 ? `${active.length} open` : 'All clear'}
+          {section === 'needs_me' && items.length > 0 ? `${items.length} need${items.length === 1 ? 's' : ''} you` : ''}
         </p>
       </div>
 
-      {/* Tabs */}
+      {/* Section tabs */}
       <div className="flex gap-0.5 p-0.5 rounded-lg bg-muted w-fit">
-        {TABS.map(t => (
+        {SECTIONS.map(s => (
           <button
-            key={t.key}
-            onClick={() => setTab(t.key)}
+            key={s.key}
+            onClick={() => setSection(s.key)}
             className={`px-3.5 py-1.5 rounded-md text-xs font-medium transition-colors ${
-              tab === t.key
+              section === s.key
                 ? 'bg-background text-foreground shadow-sm'
                 : 'text-muted-foreground hover:text-foreground'
             }`}
           >
-            {t.label}
+            {s.label}
           </button>
         ))}
       </div>
 
-      {/* Quick add */}
-      {tab === 'task' && (
+      {/* Quick add — only in Needs Me */}
+      {section === 'needs_me' && (
         <div>
           {adding ? (
             <input
@@ -120,8 +164,8 @@ export default function TasksPage() {
               value={draft}
               onChange={e => setDraft(e.target.value)}
               onKeyDown={handleKey}
-              onBlur={() => { if (!draft.trim()) { setAdding(false) } }}
-              placeholder="Task title — Enter to save, Esc to cancel"
+              onBlur={() => { if (!draft.trim()) setAdding(false) }}
+              placeholder="What needs doing — Enter to save, Esc to cancel"
               className="w-full h-9 rounded-lg border bg-card px-3 text-sm focus:outline-none focus:ring-1 focus:ring-ring placeholder:text-muted-foreground/60"
             />
           ) : (
@@ -130,106 +174,109 @@ export default function TasksPage() {
               className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors py-1"
             >
               <Plus className="h-4 w-4" />
-              Add task
+              Add item
             </button>
           )}
         </div>
       )}
 
-      {/* Task list */}
-      {isLoading ? (
-        <div className="space-y-2">
-          {[1, 2, 3].map(i => (
-            <div key={i} className="h-11 rounded-xl bg-muted animate-pulse" />
-          ))}
-        </div>
-      ) : active.length === 0 ? (
+      {/* Work items */}
+      {items.length === 0 ? (
         <div className="py-10 text-center">
-          <p className="text-sm text-muted-foreground">{EMPTY[tab]}</p>
+          <p className="text-sm text-muted-foreground">{SECTION_EMPTY[section]}</p>
         </div>
       ) : (
-        <div className="space-y-1">
-          {active.map(task => (
-            <TaskRow
+        <div className="space-y-1.5">
+          {items.map(task => (
+            <WorkItem
               key={task.id}
               task={task}
-              onToggle={() => toggleDone.mutate({ id: task.id, status: 'completed' })}
+              onComplete={() => toggleDone.mutate({ id: task.id, status: 'completed' })}
+              onReopen={() => toggleDone.mutate({ id: task.id, status: 'pending' })}
+              isCompleted={section === 'completed'}
             />
           ))}
         </div>
-      )}
-
-      {/* Recently completed */}
-      {recentCompleted.length > 0 && (
-        <section className="pt-2">
-          <p className="text-[11px] font-semibold text-muted-foreground/60 uppercase tracking-wider mb-2">
-            Recently completed
-          </p>
-          <div className="space-y-1">
-            {recentCompleted.map(task => (
-              <TaskRow
-                key={task.id}
-                task={task}
-                onToggle={() => toggleDone.mutate({ id: task.id, status: 'pending' })}
-                completed
-              />
-            ))}
-          </div>
-        </section>
       )}
     </div>
   )
 }
 
-function TaskRow({
+function WorkItem({
   task,
-  onToggle,
-  completed = false,
+  onComplete,
+  onReopen,
+  isCompleted,
 }: {
   task: Task
-  onToggle: () => void
-  completed?: boolean
+  onComplete: () => void
+  onReopen: () => void
+  isCompleted: boolean
 }) {
-  const isOverdue = task.dueDate && !completed && isPast(new Date(task.dueDate)) && !isToday(new Date(task.dueDate))
+  const isOverdue = task.dueDate && !isCompleted && isPast(new Date(task.dueDate)) && !isToday(new Date(task.dueDate))
   const isDueToday = task.dueDate && isToday(new Date(task.dueDate))
+  const nextAction = suggestedNextAction(task)
 
   return (
-    <div className={`flex items-center gap-3 px-3 py-2.5 rounded-xl group transition-colors hover:bg-accent/30 ${completed ? 'opacity-50' : ''}`}>
-      <button
-        onClick={onToggle}
-        className="flex-shrink-0 text-muted-foreground hover:text-primary transition-colors"
-      >
-        {completed
-          ? <CheckCircle2 className="h-4 w-4 text-green-500" />
-          : <Circle className="h-4 w-4" />
-        }
-      </button>
+    <div className={`rounded-xl border bg-card px-4 py-3.5 group transition-colors hover:border-border/80 ${isCompleted ? 'opacity-60' : ''}`}>
+      <div className="flex items-start gap-3">
+        <button
+          onClick={isCompleted ? onReopen : onComplete}
+          className="flex-shrink-0 text-muted-foreground hover:text-primary transition-colors mt-0.5"
+        >
+          {isCompleted
+            ? <CheckCircle2 className="h-4 w-4 text-green-500" />
+            : <Circle className="h-4 w-4" />
+          }
+        </button>
 
-      <div className="flex-1 min-w-0">
-        <p className={`text-sm leading-snug ${completed ? 'line-through text-muted-foreground' : ''}`}>
-          {task.title}
-        </p>
-        {(task.waitingFrom || task.assigneeName) && (
-          <p className="text-xs text-muted-foreground mt-0.5">
-            {task.waitingFrom ? `from ${task.waitingFrom}` : `→ ${task.assigneeName}`}
-          </p>
-        )}
-      </div>
+        <div className="flex-1 min-w-0 space-y-1.5">
+          {/* Title row */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <p className={`text-sm font-medium leading-snug ${isCompleted ? 'line-through text-muted-foreground' : ''}`}>
+              {task.title}
+            </p>
+            {task.priority === 'urgent' && (
+              <span className="text-[10px] font-semibold text-red-600 bg-red-50 px-1.5 py-0.5 rounded">urgent</span>
+            )}
+            {task.priority === 'high' && (
+              <span className="text-[10px] font-semibold text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded">high</span>
+            )}
+          </div>
 
-      <div className="flex items-center gap-2 flex-shrink-0">
-        {task.priority === 'urgent' && (
-          <span className="text-[10px] font-semibold text-red-600 bg-red-50 px-1.5 py-0.5 rounded">urgent</span>
-        )}
-        {task.priority === 'high' && (
-          <span className="text-[10px] font-semibold text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded">high</span>
-        )}
-        {task.dueDate && (
-          <span className={`text-[11px] ${
-            isOverdue ? 'text-red-500 font-medium' : isDueToday ? 'text-orange-500 font-medium' : 'text-muted-foreground'
-          }`}>
-            {isOverdue ? 'overdue' : isDueToday ? 'today' : format(new Date(task.dueDate), 'MMM d')}
-          </span>
-        )}
+          {/* Metadata row */}
+          <div className="flex items-center gap-3 flex-wrap text-xs text-muted-foreground">
+            {/* Owner */}
+            {(task.assigneeName || task.waitingFrom) && (
+              <span>
+                {task.waitingFrom ? `Waiting on ${task.waitingFrom}` : `→ ${task.assigneeName}`}
+              </span>
+            )}
+
+            {/* Due date */}
+            {task.dueDate && (
+              <span className={
+                isOverdue ? 'text-red-500 font-medium' :
+                isDueToday ? 'text-orange-500 font-medium' : ''
+              }>
+                {isOverdue ? 'Overdue' : isDueToday ? 'Due today' : `Due ${format(new Date(task.dueDate), 'MMM d')}`}
+              </span>
+            )}
+
+            {/* Last activity */}
+            {task.updatedAt && (
+              <span>Updated {formatDistanceToNow(new Date(task.updatedAt))} ago</span>
+            )}
+          </div>
+
+          {/* Suggested next action */}
+          {!isCompleted && nextAction && (
+            <div className="flex items-center gap-1 text-xs text-primary/70">
+              <ArrowRight className="h-3 w-3 flex-shrink-0" />
+              <span>{nextAction}</span>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )
