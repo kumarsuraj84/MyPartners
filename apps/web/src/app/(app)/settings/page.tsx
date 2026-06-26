@@ -67,7 +67,7 @@ export default function SettingsPage() {
                 </div>
                 <div>
                   <p className="text-sm font-medium">Gmail</p>
-                  <p className="text-xs text-muted-foreground">Read and process your emails</p>
+                  <p className="text-xs text-muted-foreground">Your assistant monitors and organizes your email</p>
                 </div>
               </div>
               {gmailIntegration?.isActive ? (
@@ -103,8 +103,8 @@ export default function SettingsPage() {
       {/* AI */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">AI Configuration</CardTitle>
-          <CardDescription>Your AI assistant is powered by Groq</CardDescription>
+          <CardTitle className="text-base">Assistant</CardTitle>
+          <CardDescription>Powers the brief, message reviews, and task suggestions</CardDescription>
         </CardHeader>
         <CardContent className="flex items-center gap-3">
           <div className="h-10 w-10 rounded-lg bg-blue-100 flex items-center justify-center">
@@ -112,7 +112,7 @@ export default function SettingsPage() {
           </div>
           <div>
             <p className="text-sm font-medium">Groq · Llama 3.3 70B</p>
-            <p className="text-xs text-muted-foreground">Ultra-fast inference for real-time analysis</p>
+            <p className="text-xs text-muted-foreground">Reads and organizes in seconds</p>
           </div>
           <Badge variant="secondary" className="ml-auto text-green-600 bg-green-100"><Check className="h-3 w-3 mr-1" />Active</Badge>
         </CardContent>

@@ -86,7 +86,7 @@ export default function KnowledgePage() {
           {notes.length === 0 ? (
             <div className="col-span-2 text-center py-12 text-muted-foreground">
               <BookOpen className="h-8 w-8 mx-auto mb-3 opacity-30" />
-              <p className="text-sm">No notes yet. Start capturing knowledge.</p>
+              <p className="text-sm">Nothing stored yet.</p>
             </div>
           ) : notes.map(note => {
             const Icon = TYPE_ICONS[note.type] ?? FileText

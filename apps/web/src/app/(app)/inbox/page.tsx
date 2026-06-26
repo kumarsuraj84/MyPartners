@@ -93,13 +93,13 @@ export default function InboxPage() {
   return (
     <div className="animate-fade-in max-w-2xl space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold">Communication Feed</h1>
-        <p className="text-muted-foreground mt-1">
+        <h1 className="text-2xl font-semibold tracking-tight">Feed</h1>
+        <p className="text-muted-foreground mt-0.5 text-sm">
           {urgentCount > 0
-            ? `${urgentCount} urgent · ${unreadCount} unread`
+            ? `${urgentCount} urgent · ${unreadCount} need your attention`
             : unreadCount > 0
-            ? `${unreadCount} unread messages`
-            : 'All caught up'}
+            ? `${unreadCount} waiting for you`
+            : "You're up to date"}
         </p>
       </div>
 
@@ -108,7 +108,7 @@ export default function InboxPage() {
         <input
           value={search}
           onChange={e => setSearch(e.target.value)}
-          placeholder="Search communications..."
+          placeholder="Search your messages…"
           className="w-full pl-9 pr-4 h-9 rounded-lg border bg-card text-sm focus:outline-none focus:ring-1 focus:ring-ring"
         />
       </div>
@@ -122,8 +122,8 @@ export default function InboxPage() {
       ) : messages.length === 0 ? (
         <div className="text-center py-16 text-muted-foreground">
           <CheckCircle2 className="h-10 w-10 mx-auto mb-3 text-green-500 opacity-50" />
-          <p className="text-sm font-medium">Communication feed is clear</p>
-          <p className="text-xs mt-1">Connect Gmail in Settings to start receiving messages</p>
+          <p className="text-sm font-medium">You're up to date.</p>
+          <p className="text-xs mt-1">Connect your inbox in Settings to get started.</p>
         </div>
       ) : (
         <div className="space-y-2">
@@ -183,12 +183,12 @@ export default function InboxPage() {
                     {/* AI Summary — primary content */}
                     {msg.summary ? (
                       <div>
-                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">Summary</p>
+                        <p className="text-[11px] font-semibold text-muted-foreground/70 uppercase tracking-wider mb-1.5">What you need to know</p>
                         <p className="text-sm leading-relaxed">{msg.summary}</p>
                       </div>
                     ) : (
                       <div className="flex items-center gap-2 text-muted-foreground">
-                        <p className="text-sm">No summary yet.</p>
+                        <p className="text-sm text-muted-foreground">Your assistant hasn't reviewed this yet.</p>
                         <Button
                           size="sm"
                           variant="outline"
@@ -197,7 +197,7 @@ export default function InboxPage() {
                           disabled={processAI.isPending}
                         >
                           <Zap className="h-3 w-3 mr-1" />
-                          {processAI.isPending ? 'Analyzing...' : 'Analyze with AI'}
+                          {processAI.isPending ? 'Reviewing…' : 'Review now'}
                         </Button>
                       </div>
                     )}
@@ -205,7 +205,7 @@ export default function InboxPage() {
                     {/* Action items */}
                     {(msg.actionItems as string[] | undefined)?.length ? (
                       <div>
-                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">Action items</p>
+                        <p className="text-[11px] font-semibold text-muted-foreground/70 uppercase tracking-wider mb-1.5">Needs action</p>
                         <ul className="space-y-1">
                           {(msg.actionItems as string[]).map((item, i) => (
                             <li key={i} className="flex items-start gap-2 text-sm">
@@ -238,7 +238,7 @@ export default function InboxPage() {
                         className="text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
                       >
                         {seeingBody ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-                        {seeingBody ? 'Hide' : 'Show'} original message
+                        {seeingBody ? 'Hide full message' : 'Read full message'}
                       </button>
                       {seeingBody && (
                         <div className="mt-3 p-3 rounded-lg bg-muted/40 text-xs text-muted-foreground leading-relaxed whitespace-pre-wrap max-h-60 overflow-y-auto">
@@ -256,7 +256,7 @@ export default function InboxPage() {
                         onClick={() => archive.mutate(msg.id)}
                         disabled={archive.isPending}
                       >
-                        <Archive className="h-3 w-3 mr-1" />Archive
+                        <Archive className="h-3 w-3 mr-1" />Done with this
                       </Button>
                     </div>
                   </div>
