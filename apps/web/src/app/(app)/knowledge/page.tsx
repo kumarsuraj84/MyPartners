@@ -1,184 +1,587 @@
 'use client'
+
 import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { cn } from '@/lib/utils'
 import {
-  MOCK_PERSONS, MOCK_ORGANIZATIONS, MOCK_PROJECTS, MOCK_DECISIONS,
-  type MemoryPerson, type MemoryOrganization, type MemoryProject, type MemoryDecision,
+  MOCK_PERSONS,
+  MOCK_ORGANIZATIONS,
+  MOCK_PROJECTS,
+  MOCK_DECISIONS,
+  type MemoryPerson,
+  type MemoryOrganization,
+  type MemoryProject,
+  type MemoryDecision,
 } from '@/data/mockMemory'
-import { FolderOpen, Lightbulb } from 'lucide-react'
+import {
+  User,
+  Building2,
+  FolderOpen,
+  Scale,
+  StickyNote,
+  Search,
+  ArrowUpRight,
+} from 'lucide-react'
 
-type Tab = 'people' | 'organisations' | 'projects' | 'decisions'
+// ─── Types ─────────────────────────────────────────────────────────────────────
 
-const TABS: { key: Tab; label: string; count: number }[] = [
-  { key: 'people',        label: 'People',        count: MOCK_PERSONS.length },
-  { key: 'organisations', label: 'Organisations',  count: MOCK_ORGANIZATIONS.length },
-  { key: 'projects',      label: 'Projects',       count: MOCK_PROJECTS.length },
-  { key: 'decisions',     label: 'Decisions',      count: MOCK_DECISIONS.length },
+type Tab = 'people' | 'organisations' | 'projects' | 'decisions' | 'notes'
+
+// ─── Tab config ────────────────────────────────────────────────────────────────
+
+const TABS: { key: Tab; label: string; icon: React.ElementType }[] = [
+  { key: 'people',        label: 'People',        icon: User },
+  { key: 'organisations', label: 'Organisations',  icon: Building2 },
+  { key: 'projects',      label: 'Projects',       icon: FolderOpen },
+  { key: 'decisions',     label: 'Decisions',      icon: Scale },
+  { key: 'notes',         label: 'Notes',          icon: StickyNote },
 ]
 
-const ORG_TYPE_STYLES: Record<string, string> = {
-  investor: 'bg-blue-50 text-blue-600 border-blue-200',
-  client:   'bg-emerald-50 text-emerald-700 border-emerald-200',
-  partner:  'bg-violet-50 text-violet-600 border-violet-200',
-  vendor:   'bg-zinc-100 text-zinc-500 border-zinc-200',
+// ─── Badge styles ──────────────────────────────────────────────────────────────
+
+const ORG_TYPE_STYLES: Record<string, { badge: string; strip: string }> = {
+  investor: {
+    badge: 'bg-blue-50 text-blue-600 border-blue-200',
+    strip: 'border-l-blue-400',
+  },
+  client: {
+    badge: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    strip: 'border-l-emerald-400',
+  },
+  partner: {
+    badge: 'bg-violet-50 text-violet-600 border-violet-200',
+    strip: 'border-l-violet-400',
+  },
+  vendor: {
+    badge: 'bg-amber-50 text-amber-700 border-amber-200',
+    strip: 'border-l-amber-400',
+  },
 }
 
-const PROJECT_STATUS_STYLES: Record<string, string> = {
-  active: 'bg-green-50 text-green-700 border-green-200',
-  paused: 'bg-amber-50 text-amber-700 border-amber-200',
-  closed: 'bg-zinc-100 text-zinc-500 border-zinc-200',
+const PROJECT_STATUS_STYLES: Record<string, { badge: string; strip: string; dot: string }> = {
+  active: {
+    badge: 'bg-green-50 text-green-700 border-green-200',
+    strip: 'border-l-green-400',
+    dot: 'bg-green-400',
+  },
+  paused: {
+    badge: 'bg-amber-50 text-amber-700 border-amber-200',
+    strip: 'border-l-amber-400',
+    dot: 'bg-amber-400',
+  },
+  closed: {
+    badge: 'bg-zinc-100 text-zinc-500 border-zinc-200',
+    strip: 'border-l-zinc-300',
+    dot: 'bg-zinc-400',
+  },
 }
 
-function PeopleTab() {
+// ─── EntityChip ────────────────────────────────────────────────────────────────
+
+function EntityChip({
+  type,
+  label,
+}: {
+  type: 'person' | 'org' | 'project' | 'decision'
+  label: string
+}) {
+  const iconMap = { person: User, org: Building2, project: FolderOpen, decision: Scale }
+  const colorMap = {
+    person:   'text-primary bg-primary/8 border-primary/20',
+    org:      'text-blue-600 bg-blue-50 border-blue-200',
+    project:  'text-violet-600 bg-violet-50 border-violet-200',
+    decision: 'text-amber-700 bg-amber-50 border-amber-200',
+  }
+  const Icon = iconMap[type]
   return (
-    <div className="space-y-2.5">
-      {MOCK_PERSONS.map((p: MemoryPerson) => (
-        <div key={p.id} className="rounded-xl border bg-card px-4 py-3.5">
-          <div className="flex items-start gap-3">
-            <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary flex-shrink-0">
-              {p.name.charAt(0)}
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-foreground">{p.name}</p>
-              <p className="text-xs text-muted-foreground">{p.role} · {p.company}</p>
-              <p className="text-[11px] text-muted-foreground/70 mt-1">Last contact: {p.lastContact}</p>
-              <p className="text-xs text-foreground/70 mt-2 leading-relaxed">{p.relationship}</p>
-              {p.notes && (
-                <p className="text-[11px] text-muted-foreground mt-1.5 leading-relaxed border-t pt-1.5">{p.notes}</p>
-              )}
-            </div>
-          </div>
-        </div>
-      ))}
+    <span
+      className={cn(
+        'inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full border',
+        colorMap[type],
+      )}
+    >
+      <Icon className="h-2.5 w-2.5" />
+      {label}
+    </span>
+  )
+}
+
+// ─── Avatar ────────────────────────────────────────────────────────────────────
+
+function Avatar({ name }: { name: string }) {
+  const initials = name
+    .split(' ')
+    .slice(0, 2)
+    .map(w => w[0])
+    .join('')
+    .toUpperCase()
+  return (
+    <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-[11px] font-bold text-primary flex-shrink-0 select-none">
+      {initials}
     </div>
   )
 }
 
-function OrganisationsTab() {
+// ─── Section label ─────────────────────────────────────────────────────────────
+
+function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <div className="space-y-2.5">
-      {MOCK_ORGANIZATIONS.map((o: MemoryOrganization) => (
-        <div key={o.id} className="rounded-xl border bg-card px-4 py-3.5">
+    <p className="text-[11px] font-semibold text-muted-foreground/70 uppercase tracking-wider mb-2.5">
+      {children}
+    </p>
+  )
+}
+
+// ─── People tab ────────────────────────────────────────────────────────────────
+
+function PeopleTab({ search }: { search: string }) {
+  const items = MOCK_PERSONS.filter(
+    p =>
+      !search ||
+      p.name.toLowerCase().includes(search.toLowerCase()) ||
+      p.company.toLowerCase().includes(search.toLowerCase()) ||
+      p.role.toLowerCase().includes(search.toLowerCase()),
+  )
+
+  if (!items.length)
+    return <EmptyState label="No people match that search." />
+
+  const internal = items.filter(p => p.company === 'Internal')
+  const external = items.filter(p => p.company !== 'Internal')
+
+  return (
+    <div className="space-y-6">
+      {external.length > 0 && (
+        <div>
+          <SectionLabel>External</SectionLabel>
+          <div className="space-y-2">
+            {external.map(p => <PersonCard key={p.id} person={p} />)}
+          </div>
+        </div>
+      )}
+      {internal.length > 0 && (
+        <div>
+          <SectionLabel>Your team</SectionLabel>
+          <div className="space-y-2">
+            {internal.map(p => <PersonCard key={p.id} person={p} />)}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function PersonCard({ person: p }: { person: MemoryPerson }) {
+  const linkedOrg = p.linkedOrgId
+    ? MOCK_ORGANIZATIONS.find(o => o.id === p.linkedOrgId)
+    : null
+
+  return (
+    <div className="rounded-xl border bg-card overflow-hidden border-l-[3px] border-l-primary/30">
+      <div className="px-4 py-3.5">
+        <div className="flex items-start gap-3">
+          <Avatar name={p.name} />
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <EntityChip type="person" label={p.name} />
+              {linkedOrg && (
+                <span className="inline-flex items-center gap-0.5 text-[11px] text-muted-foreground hover:text-foreground transition-colors cursor-default">
+                  <ArrowUpRight className="h-2.5 w-2.5" />
+                  {linkedOrg.name}
+                </span>
+              )}
+            </div>
+            <p className="text-[11px] text-muted-foreground mt-1">
+              {p.role}
+              {p.company !== 'Internal' ? ` · ${p.company}` : ''}
+            </p>
+            <p className="text-xs text-foreground/70 mt-2 leading-relaxed">
+              {p.relationship}
+            </p>
+            {p.notes && (
+              <p className="text-[11px] text-muted-foreground/80 mt-2 leading-relaxed border-t border-border/50 pt-2">
+                {p.notes}
+              </p>
+            )}
+            <p className="text-[10px] text-muted-foreground/50 mt-2 font-medium tracking-wide uppercase">
+              Last contact: {p.lastContact}
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Organisations tab ────────────────────────────────────────────────────────
+
+function OrganisationsTab({ search }: { search: string }) {
+  const items = MOCK_ORGANIZATIONS.filter(
+    o =>
+      !search ||
+      o.name.toLowerCase().includes(search.toLowerCase()) ||
+      o.type.toLowerCase().includes(search.toLowerCase()),
+  )
+
+  if (!items.length)
+    return <EmptyState label="No organisations match that search." />
+
+  return (
+    <div className="space-y-2">
+      {items.map(o => <OrgCard key={o.id} org={o} />)}
+    </div>
+  )
+}
+
+function OrgCard({ org: o }: { org: MemoryOrganization }) {
+  const style = ORG_TYPE_STYLES[o.type] ?? ORG_TYPE_STYLES.vendor
+  const linkedProjects = MOCK_PROJECTS.filter(p =>
+    o.linkedProjects.includes(p.id),
+  )
+
+  return (
+    <div
+      className={cn(
+        'rounded-xl border bg-card overflow-hidden border-l-[3px]',
+        style.strip,
+      )}
+    >
+      <div className="px-4 py-3.5">
+        <div className="flex items-start gap-3">
+          <div className="h-8 w-8 rounded-lg bg-muted flex items-center justify-center flex-shrink-0">
+            <Building2 className="h-4 w-4 text-muted-foreground/60" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
               <p className="text-sm font-semibold text-foreground">{o.name}</p>
-              <span className={cn('text-[10px] font-semibold px-1.5 py-0.5 rounded border', ORG_TYPE_STYLES[o.type])}>
+              <span
+                className={cn(
+                  'inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded border',
+                  style.badge,
+                )}
+              >
                 {o.type.charAt(0).toUpperCase() + o.type.slice(1)}
               </span>
             </div>
-            <p className="text-[11px] text-muted-foreground">{o.domain} · {o.contactCount} contact{o.contactCount !== 1 ? 's' : ''}</p>
+            <p className="text-[11px] text-muted-foreground mt-0.5">
+              {o.domain} · {o.contactCount} contact{o.contactCount !== 1 ? 's' : ''}
+            </p>
             <p className="text-xs text-foreground/70 mt-2 leading-relaxed">{o.notes}</p>
+            {linkedProjects.length > 0 && (
+              <div className="mt-2 pt-2 border-t border-border/50 flex flex-wrap gap-1.5">
+                {linkedProjects.map(p => (
+                  <EntityChip key={p.id} type="project" label={p.name} />
+                ))}
+              </div>
+            )}
           </div>
         </div>
-      ))}
+      </div>
     </div>
   )
 }
 
-function ProjectsTab() {
+// ─── Projects tab ──────────────────────────────────────────────────────────────
+
+function ProjectsTab({ search }: { search: string }) {
+  const items = MOCK_PROJECTS.filter(
+    p =>
+      !search ||
+      p.name.toLowerCase().includes(search.toLowerCase()) ||
+      p.owner.toLowerCase().includes(search.toLowerCase()),
+  )
+
+  if (!items.length)
+    return <EmptyState label="No projects match that search." />
+
   return (
-    <div className="space-y-2.5">
-      {MOCK_PROJECTS.map((p: MemoryProject) => (
-        <div key={p.id} className="rounded-xl border bg-card px-4 py-3.5">
-          <div className="flex items-start gap-3">
-            <FolderOpen className="h-4 w-4 text-muted-foreground/50 flex-shrink-0 mt-0.5" />
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 mb-1">
-                <p className="text-sm font-semibold text-foreground">{p.name}</p>
-                <span className={cn('text-[10px] font-semibold px-1.5 py-0.5 rounded border', PROJECT_STATUS_STYLES[p.status])}>
-                  {p.status.charAt(0).toUpperCase() + p.status.slice(1)}
-                </span>
-              </div>
-              <p className="text-[11px] text-muted-foreground">Owner: {p.owner}</p>
-              <p className="text-xs text-foreground/70 mt-2 leading-relaxed">{p.notes}</p>
-              {p.decisions.length > 0 && (
-                <div className="mt-2 pt-2 border-t">
-                  <p className="text-[10px] font-semibold text-muted-foreground/50 uppercase tracking-wider mb-1">
-                    Related decisions
-                  </p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {p.decisions.map((d, i) => (
-                      <span key={i} className="text-[11px] bg-muted px-2 py-0.5 rounded-md text-muted-foreground">{d}</span>
-                    ))}
-                  </div>
+    <div className="space-y-2">
+      {items.map(p => <ProjectCard key={p.id} project={p} />)}
+    </div>
+  )
+}
+
+function ProjectCard({ project: p }: { project: MemoryProject }) {
+  const style = PROJECT_STATUS_STYLES[p.status] ?? PROJECT_STATUS_STYLES.closed
+  const linkedOrg = p.linkedOrgId
+    ? MOCK_ORGANIZATIONS.find(o => o.id === p.linkedOrgId)
+    : null
+  const linkedDecisions = MOCK_DECISIONS.filter(d =>
+    p.decisions.includes(d.id),
+  )
+
+  return (
+    <div
+      className={cn(
+        'rounded-xl border bg-card overflow-hidden border-l-[3px]',
+        style.strip,
+      )}
+    >
+      <div className="px-4 py-3.5">
+        <div className="flex items-start gap-3">
+          <div className="h-8 w-8 rounded-lg bg-muted flex items-center justify-center flex-shrink-0">
+            <FolderOpen className="h-4 w-4 text-muted-foreground/60" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <p className="text-sm font-semibold text-foreground">{p.name}</p>
+              <span
+                className={cn(
+                  'inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded border',
+                  style.badge,
+                )}
+              >
+                <span className={cn('h-1.5 w-1.5 rounded-full', style.dot)} />
+                {p.status.charAt(0).toUpperCase() + p.status.slice(1)}
+              </span>
+            </div>
+            <p className="text-[11px] text-muted-foreground mt-0.5">
+              {p.owner}
+              {linkedOrg ? ` · ${linkedOrg.name}` : ''}
+            </p>
+            <p className="text-xs text-foreground/70 mt-2 leading-relaxed">{p.notes}</p>
+            {linkedDecisions.length > 0 && (
+              <div className="mt-2 pt-2 border-t border-border/50">
+                <p className="text-[10px] font-semibold text-muted-foreground/50 uppercase tracking-wider mb-1.5">
+                  Decisions on record
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {linkedDecisions.map(d => (
+                    <EntityChip key={d.id} type="decision" label={d.title} />
+                  ))}
                 </div>
-              )}
-            </div>
+              </div>
+            )}
           </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Decisions tab ─────────────────────────────────────────────────────────────
+
+function DecisionsTab({ search }: { search: string }) {
+  const items = MOCK_DECISIONS.filter(
+    d =>
+      !search ||
+      d.title.toLowerCase().includes(search.toLowerCase()) ||
+      d.madeBy.toLowerCase().includes(search.toLowerCase()),
+  )
+
+  if (!items.length)
+    return <EmptyState label="No decisions match that search." />
+
+  return (
+    <div className="space-y-2">
+      {items.map(d => <DecisionCard key={d.id} decision={d} />)}
+    </div>
+  )
+}
+
+function DecisionCard({ decision: d }: { decision: MemoryDecision }) {
+  const linkedProject = d.linkedProject
+    ? MOCK_PROJECTS.find(p => p.id === d.linkedProject)
+    : null
+
+  return (
+    <div className="rounded-xl border bg-card overflow-hidden border-l-[3px] border-l-amber-400">
+      <div className="px-4 py-3.5">
+        <div className="flex items-start gap-3">
+          <div className="h-8 w-8 rounded-lg bg-amber-50 flex items-center justify-center flex-shrink-0">
+            <Scale className="h-4 w-4 text-amber-600" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-foreground leading-snug">{d.title}</p>
+            <p className="text-[11px] text-muted-foreground mt-0.5">
+              {d.date} · {d.madeBy}
+            </p>
+            <div className="mt-2.5 px-3 py-2.5 rounded-lg bg-amber-50/60 border border-amber-100">
+              <p className="text-[10px] font-semibold text-amber-700/70 uppercase tracking-wider mb-1">
+                Outcome
+              </p>
+              <p className="text-xs text-foreground/80 leading-relaxed">{d.outcome}</p>
+            </div>
+            {d.context && (
+              <p className="text-[11px] text-muted-foreground/70 mt-2 leading-relaxed">
+                {d.context}
+              </p>
+            )}
+            {linkedProject && (
+              <div className="mt-2">
+                <EntityChip type="project" label={linkedProject.name} />
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Notes tab (API-backed) ────────────────────────────────────────────────────
+
+interface KnowledgeNote {
+  id: string
+  title?: string
+  content: string
+  source?: string
+  createdAt?: string
+}
+
+function NotesTab({ search }: { search: string }) {
+  const { data, isLoading, isError } = useQuery<KnowledgeNote[]>({
+    queryKey: ['knowledge', search],
+    queryFn: async () => {
+      const url = search
+        ? `/api/knowledge?search=${encodeURIComponent(search)}`
+        : '/api/knowledge'
+      const res = await fetch(url)
+      if (!res.ok) throw new Error('unavailable')
+      return res.json()
+    },
+    retry: false,
+  })
+
+  if (isLoading) {
+    return (
+      <div className="rounded-xl border bg-card px-4 py-5">
+        <p className="text-xs text-muted-foreground">
+          Knowledge notes are being retrieved.
+        </p>
+      </div>
+    )
+  }
+
+  if (isError || !data) {
+    return (
+      <div className="rounded-xl border bg-card px-4 py-5">
+        <p className="text-xs text-muted-foreground">
+          Knowledge notes are being retrieved.
+        </p>
+      </div>
+    )
+  }
+
+  if (!data.length) return <EmptyState label="No notes found." />
+
+  return (
+    <div className="space-y-2">
+      {data.map(note => (
+        <div
+          key={note.id}
+          className="rounded-xl border bg-card overflow-hidden border-l-[3px] border-l-primary/30 px-4 py-3.5"
+        >
+          {note.title && (
+            <p className="text-sm font-semibold text-foreground mb-1">{note.title}</p>
+          )}
+          <p className="text-xs text-foreground/70 leading-relaxed">{note.content}</p>
+          {(note.source || note.createdAt) && (
+            <p className="text-[10px] text-muted-foreground/50 mt-2 font-medium uppercase tracking-wide">
+              {note.source ? `From ${note.source}` : 'Added by your office'}
+              {note.createdAt ? ` · ${note.createdAt}` : ''}
+            </p>
+          )}
         </div>
       ))}
     </div>
   )
 }
 
-function DecisionsTab() {
+// ─── Empty state ───────────────────────────────────────────────────────────────
+
+function EmptyState({ label }: { label: string }) {
   return (
-    <div className="space-y-2.5">
-      {MOCK_DECISIONS.map((d: MemoryDecision) => (
-        <div key={d.id} className="rounded-xl border bg-card px-4 py-3.5">
-          <div className="flex items-start gap-3">
-            <Lightbulb className="h-4 w-4 text-muted-foreground/50 flex-shrink-0 mt-0.5" />
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-foreground leading-snug">{d.title}</p>
-              <p className="text-[11px] text-muted-foreground mt-0.5">{d.date} · {d.madeBy}</p>
-              <div className="mt-2 px-3 py-2 rounded-lg bg-muted/50">
-                <p className="text-[10px] font-semibold text-muted-foreground/60 uppercase tracking-wider mb-1">Outcome</p>
-                <p className="text-xs text-foreground/80 leading-relaxed">{d.outcome}</p>
-              </div>
-              <p className="text-[11px] text-muted-foreground/70 mt-2 leading-relaxed">{d.context}</p>
-            </div>
-          </div>
-        </div>
-      ))}
+    <div className="rounded-xl border bg-card px-4 py-6 text-center">
+      <p className="text-xs text-muted-foreground">{label}</p>
     </div>
   )
 }
+
+// ─── Page ──────────────────────────────────────────────────────────────────────
 
 export default function KnowledgePage() {
   const [activeTab, setActiveTab] = useState<Tab>('people')
+  const [search, setSearch] = useState('')
+
+  const tabCounts: Record<Tab, number> = {
+    people:        MOCK_PERSONS.length,
+    organisations: MOCK_ORGANIZATIONS.length,
+    projects:      MOCK_PROJECTS.length,
+    decisions:     MOCK_DECISIONS.length,
+    notes:         0,
+  }
 
   return (
-    <div className="animate-fade-in max-w-2xl space-y-8 pb-16">
+    <div className="animate-fade-in max-w-2xl space-y-6 pb-16">
 
       {/* Header */}
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Business Memory</h1>
-        <p className="text-muted-foreground mt-0.5 text-sm">
-          Everything your office has observed, learned, and remembered about your business.
+        <p className="text-sm text-muted-foreground mt-0.5">
+          Everything your office knows — people, organisations, projects, decisions.
         </p>
       </div>
 
+      {/* Search */}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/50 pointer-events-none" />
+        <input
+          type="text"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="Search people, organisations, projects…"
+          className={cn(
+            'w-full rounded-xl border bg-card px-4 py-2.5 pl-8',
+            'text-sm placeholder:text-muted-foreground/40 text-foreground',
+            'outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40',
+            'transition-all',
+          )}
+        />
+      </div>
+
       {/* Tab navigation */}
-      <div className="flex items-center gap-1 p-1 rounded-lg bg-muted/50 border w-fit">
-        {TABS.map(tab => (
-          <button
-            key={tab.key}
-            onClick={() => setActiveTab(tab.key)}
-            className={cn(
-              'flex items-center gap-1.5 h-7 px-3 rounded-md text-xs font-medium transition-all',
-              activeTab === tab.key
-                ? 'bg-background text-foreground shadow-sm'
-                : 'text-muted-foreground hover:text-foreground',
-            )}
-          >
-            {tab.label}
-            <span className={cn(
-              'text-[10px] font-bold tabular-nums px-1 py-px rounded-full min-w-[16px] text-center',
-              activeTab === tab.key
-                ? 'bg-primary/10 text-primary'
-                : 'bg-muted-foreground/15 text-muted-foreground',
-            )}>
-              {tab.count}
-            </span>
-          </button>
-        ))}
+      <div className="flex items-center gap-0.5 overflow-x-auto pb-0.5 -mb-0.5">
+        {TABS.map(tab => {
+          const isActive = activeTab === tab.key
+          const count = tabCounts[tab.key]
+          return (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              className={cn(
+                'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all whitespace-nowrap',
+                isActive
+                  ? 'bg-primary/10 text-primary'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-muted/50',
+              )}
+            >
+              {tab.label}
+              {count > 0 && (
+                <span
+                  className={cn(
+                    'text-[10px] font-bold tabular-nums px-1 py-px rounded-full min-w-[16px] text-center',
+                    isActive
+                      ? 'bg-primary/15 text-primary'
+                      : 'bg-muted-foreground/15 text-muted-foreground',
+                  )}
+                >
+                  {count}
+                </span>
+              )}
+            </button>
+          )
+        })}
       </div>
 
       {/* Tab content */}
-      {activeTab === 'people'        && <PeopleTab />}
-      {activeTab === 'organisations' && <OrganisationsTab />}
-      {activeTab === 'projects'      && <ProjectsTab />}
-      {activeTab === 'decisions'     && <DecisionsTab />}
+      <div>
+        {activeTab === 'people'        && <PeopleTab        search={search} />}
+        {activeTab === 'organisations' && <OrganisationsTab search={search} />}
+        {activeTab === 'projects'      && <ProjectsTab      search={search} />}
+        {activeTab === 'decisions'     && <DecisionsTab     search={search} />}
+        {activeTab === 'notes'         && <NotesTab         search={search} />}
+      </div>
 
     </div>
   )

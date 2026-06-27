@@ -189,6 +189,10 @@ export const PARTNERS: Partner[] = [
       { id: 'meet-2', time: '1 hour ago',  description: 'Prepared board call briefing — ready for your approval',                             partnerId: 'meeting', partnerName: 'Meeting Partner' },
       { id: 'meet-3', time: '4 hours ago', description: 'Organised notes from the product review — decision logged to memory',                partnerId: 'meeting', partnerName: 'Meeting Partner' },
     ],
+    needsAttention: undefined,
+    waitingForYou: 'Board call brief is ready — please review before tomorrow 9am',
+    recentlyCompleted: ['Captured 4 action items', 'Organised product review notes'],
+    suggestedActions: [{ id: 'meet-1', label: 'Review board brief', href: '/partners' }],
   },
   {
     id: 'memory',
@@ -213,6 +217,10 @@ export const PARTNERS: Partner[] = [
       { id: 'mem-2', time: '1 hour ago',  description: 'Connected Apex Ventures to the Series B project record',                              partnerId: 'memory', partnerName: 'Memory Partner' },
       { id: 'mem-3', time: '4 hours ago', description: 'Stored decision: budget approval threshold moved to $50K',                            partnerId: 'memory', partnerName: 'Memory Partner' },
     ],
+    needsAttention: undefined,
+    waitingForYou: undefined,
+    recentlyCompleted: ['Added Marcus Webb to memory', 'Connected Apex Ventures to Series B', 'Stored budget decision'],
+    suggestedActions: [],
   },
 ]
 
