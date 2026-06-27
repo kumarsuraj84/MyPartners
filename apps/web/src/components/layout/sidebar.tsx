@@ -3,17 +3,18 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import {
-  LayoutDashboard, BookOpen, Settings, Zap, LogOut, Users, Building2
+  LayoutDashboard, BookOpen, Settings, Zap, LogOut, Users, Building2, Scale
 } from 'lucide-react'
 
 import { useAuth } from '@/hooks/use-auth'
 
 const NAV = [
-  { label: 'My Desk',  href: '/',                icon: LayoutDashboard },
-  { label: 'Partners', href: '/partners',         icon: Users },
-  { label: 'Office',   href: '/mission-control',  icon: Building2 },
-  { label: 'Memory',   href: '/knowledge',        icon: BookOpen },
-  { label: 'Settings', href: '/settings',         icon: Settings },
+  { label: 'My Desk',   href: '/',                icon: LayoutDashboard },
+  { label: 'Decisions', href: '/decisions',        icon: Scale },
+  { label: 'Partners',  href: '/partners',         icon: Users },
+  { label: 'Office',    href: '/mission-control',  icon: Building2 },
+  { label: 'Memory',    href: '/knowledge',        icon: BookOpen },
+  { label: 'Settings',  href: '/settings',         icon: Settings },
 ]
 
 export function Sidebar() {
