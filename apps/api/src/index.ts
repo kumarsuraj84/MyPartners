@@ -47,7 +47,9 @@ const app = Fastify({ logger: { level: process.env.LOG_LEVEL || (isProd ? 'info'
 
 // Plugins
 await app.register(cors, {
-  origin: process.env.FRONTEND_URL || (isProd ? false : 'http://localhost:3000'),
+  origin: process.env.FRONTEND_URL
+    ? process.env.FRONTEND_URL.split(',').map(s => s.trim())
+    : (isProd ? false : ['http://localhost:3000', 'http://localhost:3002']),
   credentials: true,
 })
 await app.register(jwt, { secret: process.env.JWT_SECRET || 'dev_secret_change_me' })
