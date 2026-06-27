@@ -65,14 +65,16 @@ export default function HomePage() {
   const router = useRouter()
   const qc = useQueryClient()
 
-  const { data: brief, isLoading } = useQuery<Brief>({
+  const { data: brief, isLoading: briefLoading } = useQuery<Brief>({
     queryKey: ['brief', 'today'],
     queryFn: () => api.get('/api/brief/today'),
+    retry: false,
   })
 
   const { data: signals = [] } = useQuery<Signal[]>({
     queryKey: ['signals'],
     queryFn: () => api.get('/api/signals'),
+    retry: false,
   })
 
   const dismissSignal = useMutation({
@@ -85,8 +87,6 @@ export default function HomePage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['signals'] }),
   })
 
-  if (isLoading) return <HomeSkeletonLoader />
-
   const firstName = user?.name?.split(' ')[0] ?? 'there'
   const content = brief?.content
 
@@ -96,12 +96,14 @@ export default function HomePage() {
   const decisionsReady =
     content?.decisionsNeeded?.length ?? MOCK_BRIEF.decisionsReady
 
-  // Brief preview data — prefer live, fall back to mock (undefined triggers mock inside component)
-  const briefData = content
+  // Brief preview data — prefer live, fall back to mock
+  const briefData = briefLoading
+    ? undefined
+    : content
     ? { situationSummary: content.situationSummary, topPriority: content.topPriority }
-    : undefined
+    : { situationSummary: MOCK_BRIEF.situationSummary, topPriority: MOCK_BRIEF.topPriority }
 
-  // Attention items from live brief
+  // Attention items from live brief — empty when unavailable
   const requiresAttention = content?.requiresAttention ?? []
 
   // Show signals section label only once even when both sources have items
@@ -114,7 +116,9 @@ export default function HomePage() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">{greeting}</h1>
         <p className="text-muted-foreground mt-0.5 text-sm">
-          Your office has prepared today's priorities.
+          {briefLoading
+            ? 'Your office is preparing your brief.'
+            : 'Your office has prepared today’s priorities.'}
         </p>
         <p className="text-[11px] text-muted-foreground/60 mt-1">
           {format(new Date(), 'EEEE, MMMM d')}
@@ -130,7 +134,11 @@ export default function HomePage() {
       )}
 
       {/* ── Situation + focus ─────────────────────────────────────────────── */}
-      <MorningBriefPreview brief={briefData} />
+      {briefLoading ? (
+        <BriefSkeleton />
+      ) : (
+        <MorningBriefPreview brief={briefData} />
+      )}
 
       {/* ── Needs attention today ─────────────────────────────────────────── */}
       {hasSignals && (
@@ -311,30 +319,11 @@ function Label({ children }: { children: React.ReactNode }) {
   )
 }
 
-function HomeSkeletonLoader() {
+function BriefSkeleton() {
   return (
-    <div className="max-w-2xl space-y-10 pb-16 animate-pulse">
-      <div className="space-y-2">
-        <div className="h-7 w-56 bg-muted rounded-lg" />
-        <div className="h-4 w-48 bg-muted rounded" />
-        <div className="h-3 w-32 bg-muted rounded" />
-      </div>
-      <div className="h-12 bg-muted rounded-xl" />
-      <div className="space-y-2">
-        <div className="h-14 bg-muted rounded-xl" />
-        <div className="h-10 bg-muted rounded-xl" />
-      </div>
-      <div className="space-y-2">
-        <div className="h-3 w-28 bg-muted rounded" />
-        <div className="h-16 bg-muted rounded-xl" />
-        <div className="h-16 bg-muted rounded-xl" />
-        <div className="h-16 bg-muted rounded-xl" />
-      </div>
-      <div className="space-y-2">
-        <div className="h-3 w-28 bg-muted rounded" />
-        <div className="h-16 bg-muted rounded-xl" />
-        <div className="h-16 bg-muted rounded-xl" />
-      </div>
+    <div className="animate-pulse space-y-2">
+      <div className="h-14 bg-muted rounded-xl" />
+      <div className="h-10 bg-muted rounded-xl" />
     </div>
   )
 }
