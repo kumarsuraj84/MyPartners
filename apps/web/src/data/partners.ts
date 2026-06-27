@@ -28,6 +28,12 @@ export interface PartnerStat {
   value: string
 }
 
+export interface PartnerSuggestedAction {
+  id: string
+  label: string
+  href?: string
+}
+
 export interface Partner {
   id: string
   name: string
@@ -41,6 +47,10 @@ export interface Partner {
   iconColor: string
   activities: PartnerActivity[]
   stats: PartnerStat[]
+  needsAttention?: string
+  waitingForYou?: string
+  recentlyCompleted?: string[]
+  suggestedActions?: PartnerSuggestedAction[]
 }
 
 // ─── Approval Items ───────────────────────────────────────────────────────────
@@ -95,6 +105,10 @@ export const PARTNERS: Partner[] = [
       { id: 'cos-2', time: '12 min ago', description: 'Coordinated with Communication Partner on the Meridian Corp thread',                   partnerId: 'chief-of-staff', partnerName: 'Chief of Staff' },
       { id: 'cos-3', time: '1 hour ago', description: 'Updated decision list — Q3 budget sign-off moved to top priority',                     partnerId: 'chief-of-staff', partnerName: 'Chief of Staff' },
     ],
+    needsAttention: 'Q3 budget sign-off is blocking 3 team decisions',
+    waitingForYou: 'Recommendation: prioritise budget approval today',
+    recentlyCompleted: ['Reviewed 14 items this morning', 'Coordinated 2 time-sensitive items'],
+    suggestedActions: [{ id: 'cos-1', label: 'Review recommendation', href: '/decisions' }],
   },
   {
     id: 'communication',
@@ -119,6 +133,10 @@ export const PARTNERS: Partner[] = [
       { id: 'com-2', time: '22 min ago',  description: 'Reviewed the Apex Ventures thread and prepared a draft response for your approval',    partnerId: 'communication', partnerName: 'Communication Partner' },
       { id: 'com-3', time: '2 hours ago', description: 'Organised 6 newsletter and update emails — none require your attention',               partnerId: 'communication', partnerName: 'Communication Partner' },
     ],
+    needsAttention: 'Sarah Chen requires a direct reply — cannot be delegated',
+    waitingForYou: 'Draft reply to Marcus Webb (Apex Ventures) — ready for your approval',
+    recentlyCompleted: ['Read 9 messages', 'Organised 6 newsletters'],
+    suggestedActions: [{ id: 'com-1', label: 'Approve draft reply', href: '/partners' }],
   },
   {
     id: 'followup',
@@ -143,6 +161,10 @@ export const PARTNERS: Partner[] = [
       { id: 'fu-2', time: '45 min ago',  description: 'Tracked new commitment: respond to Legal on contract terms by Friday',                 partnerId: 'followup', partnerName: 'Follow-up Partner' },
       { id: 'fu-3', time: '3 hours ago', description: 'Marked Q2 vendor review as complete after your email confirmation',                    partnerId: 'followup', partnerName: 'Follow-up Partner' },
     ],
+    needsAttention: 'Investor update is 2 days overdue',
+    waitingForYou: undefined,
+    recentlyCompleted: ['Tracked new Legal commitment', 'Marked Q2 vendor review complete'],
+    suggestedActions: [{ id: 'fu-1', label: 'Send investor update', href: '/decisions' }],
   },
   {
     id: 'meeting',

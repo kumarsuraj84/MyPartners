@@ -9,7 +9,7 @@ import {
 import { useAuth } from '@/hooks/use-auth'
 
 const NAV = [
-  { label: 'My Desk',   href: '/',                icon: LayoutDashboard },
+  { label: 'My Day',    href: '/',                icon: LayoutDashboard },
   { label: 'Decisions', href: '/decisions',        icon: Scale },
   { label: 'Partners',  href: '/partners',         icon: Users },
   { label: 'Office',    href: '/mission-control',  icon: Building2 },

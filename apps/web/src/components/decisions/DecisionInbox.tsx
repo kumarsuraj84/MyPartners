@@ -2,7 +2,7 @@
 import { useState } from 'react'
 import { cn } from '@/lib/utils'
 import { DecisionCard } from './DecisionCard'
-import { filterDecisions, countByFilter } from '@/data/decisions'
+import { filterDecisions, countByFilter, countByEscalation } from '@/data/decisions'
 import type { Decision, DecisionFilter } from '@/data/decisions'
 import { CheckCircle2 } from 'lucide-react'
 
@@ -20,16 +20,53 @@ interface DecisionInboxProps {
 export function DecisionInbox({ decisions }: DecisionInboxProps) {
   const [activeFilter, setActiveFilter] = useState<DecisionFilter>('all')
 
-  const counts   = countByFilter(decisions)
-  const filtered = filterDecisions(decisions, activeFilter)
+  const counts         = countByFilter(decisions)
+  const escalationCounts = countByEscalation(decisions)
+  const filtered       = filterDecisions(decisions, activeFilter)
+
+  // Today tab label shows urgent + today count
+  const todayCount = counts['today']
 
   return (
     <div className="space-y-4">
+      {/* Escalation summary */}
+      {(escalationCounts.critical > 0 || escalationCounts.urgent > 0) && (
+        <div className="flex items-center gap-3 text-[11px]">
+          {escalationCounts.critical > 0 && (
+            <span className="flex items-center gap-1.5">
+              <span className="h-1.5 w-1.5 rounded-full bg-red-500 flex-shrink-0" />
+              <span className="text-red-600 font-semibold">
+                {escalationCounts.critical} critical
+              </span>
+            </span>
+          )}
+          {escalationCounts.urgent > 0 && (
+            <span className="flex items-center gap-1.5">
+              <span className="h-1.5 w-1.5 rounded-full bg-orange-400 flex-shrink-0" />
+              <span className="text-orange-600 font-semibold">
+                {escalationCounts.urgent} urgent
+              </span>
+            </span>
+          )}
+          {escalationCounts.important > 0 && (
+            <span className="flex items-center gap-1.5">
+              <span className="h-1.5 w-1.5 rounded-full bg-amber-400 flex-shrink-0" />
+              <span className="text-amber-700 font-semibold">
+                {escalationCounts.important} important
+              </span>
+            </span>
+          )}
+        </div>
+      )}
+
       {/* Filter tabs */}
       <div className="flex items-center gap-1 p-1 rounded-lg bg-muted/50 border w-fit">
         {(['urgent', 'today', 'waiting', 'all'] as DecisionFilter[]).map(filter => {
-          const count   = counts[filter]
+          const count    = counts[filter]
           const isActive = filter === activeFilter
+          const label    = filter === 'today'
+            ? `Today (${todayCount})`
+            : FILTER_LABELS[filter]
 
           return (
             <button
@@ -42,20 +79,22 @@ export function DecisionInbox({ decisions }: DecisionInboxProps) {
                   : 'text-muted-foreground hover:text-foreground',
               )}
             >
-              {FILTER_LABELS[filter]}
-              {count > 0 && (
-                <span className={cn(
-                  'text-[10px] font-bold tabular-nums px-1 py-px rounded-full min-w-[16px] text-center',
-                  isActive
-                    ? filter === 'urgent'
-                      ? 'bg-red-100 text-red-600'
-                      : filter === 'today'
-                      ? 'bg-orange-100 text-orange-600'
-                      : 'bg-primary/10 text-primary'
-                    : 'bg-muted-foreground/15 text-muted-foreground',
-                )}>
-                  {count}
-                </span>
+              {filter === 'today' ? label : (
+                <>
+                  {FILTER_LABELS[filter]}
+                  {count > 0 && (
+                    <span className={cn(
+                      'text-[10px] font-bold tabular-nums px-1 py-px rounded-full min-w-[16px] text-center',
+                      isActive
+                        ? filter === 'urgent'
+                          ? 'bg-red-100 text-red-600'
+                          : 'bg-primary/10 text-primary'
+                        : 'bg-muted-foreground/15 text-muted-foreground',
+                    )}>
+                      {count}
+                    </span>
+                  )}
+                </>
               )}
             </button>
           )

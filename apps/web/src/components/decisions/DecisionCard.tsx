@@ -2,10 +2,12 @@
 import { useState } from 'react'
 import {
   ChevronDown, ChevronUp, Check, MessageSquare, Clock,
-  AlertCircle, Info, CheckCircle2, MinusCircle,
+  CheckCircle2, MinusCircle, Scale,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import type { Decision, DecisionCategory, ConfidenceLevel } from '@/data/decisions'
+import { ConfidenceBadge } from '@/components/ui/confidence-badge'
+import { ImpactCard } from '@/components/ui/impact-card'
+import type { Decision, DecisionCategory, EscalationLevel } from '@/data/decisions'
 
 // ─── Visual config ────────────────────────────────────────────────────────────
 
@@ -17,42 +19,10 @@ const CATEGORY_STYLES: Record<DecisionCategory, { badge: string }> = {
   External:    { badge: 'bg-amber-50 text-amber-700 border-amber-200' },
 }
 
-const PRIORITY_STYLES: Record<string, { badge: string; label: string }> = {
-  urgent:  { badge: 'bg-red-50 text-red-600 border-red-200',   label: 'Urgent' },
-  today:   { badge: 'bg-orange-50 text-orange-600 border-orange-200', label: 'Today' },
-  waiting: { badge: 'bg-zinc-100 text-zinc-500 border-zinc-200', label: 'Waiting' },
-}
-
-// ─── Confidence indicator ─────────────────────────────────────────────────────
-
-function ConfidenceBar({ level, note }: { level: ConfidenceLevel; note?: string }) {
-  const config = {
-    high:   { filled: 3, color: 'bg-green-500',  text: 'High confidence',   label: 'text-green-700' },
-    medium: { filled: 2, color: 'bg-amber-400',  text: 'Medium confidence', label: 'text-amber-700' },
-    low:    { filled: 1, color: 'bg-orange-400', text: 'Lower confidence',  label: 'text-orange-700' },
-  }[level]
-
-  return (
-    <div className="flex items-center gap-2 flex-wrap">
-      <div className="flex items-center gap-1">
-        {[0, 1, 2].map(i => (
-          <span
-            key={i}
-            className={cn(
-              'h-2 w-5 rounded-sm',
-              i < config.filled ? config.color : 'bg-muted',
-            )}
-          />
-        ))}
-      </div>
-      <span className={cn('text-[11px] font-semibold', config.label)}>
-        {config.text}
-      </span>
-      {note && (
-        <span className="text-[11px] text-muted-foreground">— {note}</span>
-      )}
-    </div>
-  )
+const ESCALATION_STYLES: Record<EscalationLevel, { badge: string; border: string; label: string }> = {
+  critical:  { badge: 'bg-red-50 text-red-600 border-red-200',     border: 'border-l-2 border-l-red-500',    label: 'Critical' },
+  urgent:    { badge: 'bg-orange-50 text-orange-600 border-orange-200', border: 'border-l-2 border-l-orange-400', label: 'Urgent' },
+  important: { badge: 'bg-amber-50 text-amber-700 border-amber-200', border: 'border-l-2 border-l-amber-400',  label: 'Important' },
 }
 
 // ─── Resolved states ──────────────────────────────────────────────────────────
@@ -88,8 +58,11 @@ export function DecisionCard({ decision: d }: DecisionCardProps) {
   const [state, setState]       = useState<CardState>('pending')
   const [expanded, setExpanded] = useState(false)
 
-  const catStyle  = CATEGORY_STYLES[d.category]
-  const priStyle  = PRIORITY_STYLES[d.priority]
+  const catStyle = CATEGORY_STYLES[d.category]
+  const escStyle = ESCALATION_STYLES[d.escalation]
+
+  // ── Confidence level mapping ─────────────────────────────────────────────────
+  const confidenceBadgeLevel = d.confidenceLevel === 'low' ? 'needs-review' : d.confidenceLevel
 
   // ── Resolved states ──────────────────────────────────────────────────────────
   if (state === 'approved') {
@@ -127,19 +100,26 @@ export function DecisionCard({ decision: d }: DecisionCardProps) {
   return (
     <div className={cn(
       'rounded-xl border bg-card overflow-hidden',
-      d.priority === 'urgent' && 'border-l-2 border-l-red-400',
-      d.priority === 'today'  && 'border-l-2 border-l-orange-400',
+      escStyle.border,
     )}>
 
       {/* ── Header ── */}
       <div className="px-4 pt-4 pb-3">
         {/* Badges row */}
         <div className="flex items-center gap-1.5 flex-wrap mb-2.5">
-          <span className={cn('text-[10px] font-semibold px-1.5 py-0.5 rounded border', catStyle.badge)}>
-            {d.category}
+          {/* Escalation badge */}
+          <span className={cn(
+            'inline-flex items-center gap-1.5 text-[11px] font-semibold px-2 py-0.5 rounded-full border',
+            escStyle.badge,
+          )}>
+            {escStyle.label}
           </span>
-          <span className={cn('text-[10px] font-semibold px-1.5 py-0.5 rounded border', priStyle.badge)}>
-            {priStyle.label}
+          {/* Category badge */}
+          <span className={cn(
+            'inline-flex items-center gap-1.5 text-[11px] font-semibold px-2 py-0.5 rounded-full border',
+            catStyle.badge,
+          )}>
+            {d.category}
           </span>
           <span className="ml-auto flex items-center gap-1 text-[11px] text-muted-foreground flex-shrink-0">
             <Clock className="h-3 w-3" />
@@ -171,9 +151,35 @@ export function DecisionCard({ decision: d }: DecisionCardProps) {
           </p>
         </div>
 
+        {/* Business Impact — always visible */}
+        <div className="mt-2.5">
+          <ImpactCard
+            impact={d.businessImpactSummary}
+            actionIf={d.actionIfDelayed}
+          />
+        </div>
+
         {/* Confidence — always visible */}
         <div className="mt-2.5">
-          <ConfidenceBar level={d.confidenceLevel} note={d.confidenceNote} />
+          <ConfidenceBadge level={confidenceBadgeLevel} note={d.confidenceNote} />
+        </div>
+
+        {/* Suggested deadline — always visible if present */}
+        {d.suggestedDeadline && (
+          <div className="mt-2 flex items-center gap-1.5">
+            <Clock className="h-3 w-3 text-muted-foreground/60 flex-shrink-0" />
+            <span className="text-[11px] text-muted-foreground">
+              Recommended by <span className="font-medium text-foreground/70">{d.suggestedDeadline}</span>
+            </span>
+          </div>
+        )}
+
+        {/* Why This Matters — always visible */}
+        <div className="mt-3">
+          <p className="text-[10px] font-semibold text-muted-foreground/70 uppercase tracking-wider mb-1.5">
+            Why this matters
+          </p>
+          <p className="text-xs text-foreground/80 leading-relaxed">{d.whyItMatters}</p>
         </div>
       </div>
 
@@ -181,21 +187,35 @@ export function DecisionCard({ decision: d }: DecisionCardProps) {
       {expanded && (
         <div className="border-t bg-muted/20 divide-y divide-border/60">
 
-          {/* Why this matters */}
-          <div className="px-4 py-3">
-            <p className="text-[10px] font-semibold text-muted-foreground/70 uppercase tracking-wider mb-1.5">
-              Why this matters
-            </p>
-            <p className="text-xs text-foreground/80 leading-relaxed">{d.whyItMatters}</p>
-          </div>
-
-          {/* Business impact */}
+          {/* Business impact (full) */}
           <div className="px-4 py-3">
             <p className="text-[10px] font-semibold text-muted-foreground/70 uppercase tracking-wider mb-1.5">
               Business impact
             </p>
             <p className="text-xs text-foreground/80 leading-relaxed">{d.businessImpact}</p>
           </div>
+
+          {/* Related decisions */}
+          {d.relatedDecisions && d.relatedDecisions.length > 0 && (
+            <div className="px-4 py-3">
+              <p className="text-[10px] font-semibold text-muted-foreground/70 uppercase tracking-wider mb-2">
+                Related
+              </p>
+              <ul className="space-y-2">
+                {d.relatedDecisions.map(rel => (
+                  <li key={rel.id} className="flex items-start gap-2">
+                    <Scale className="h-3.5 w-3.5 text-muted-foreground/50 flex-shrink-0 mt-0.5" />
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-xs text-foreground/80">{rel.title}</span>
+                      <span className="inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded bg-muted text-muted-foreground border border-border/60">
+                        {rel.relationship}
+                      </span>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
 
           {/* Supporting context */}
           <div className="px-4 py-3">

@@ -1,5 +1,5 @@
 'use client'
-import { DECISIONS, countByCategory } from '@/data/decisions'
+import { DECISIONS, countByCategory, countByEscalation } from '@/data/decisions'
 import { DecisionInbox } from '@/components/decisions/DecisionInbox'
 import type { DecisionCategory } from '@/data/decisions'
 
@@ -20,20 +20,39 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 }
 
 export default function DecisionsPage() {
-  const categoryCounts = countByCategory(DECISIONS)
-  const totalPending   = DECISIONS.length
+  const categoryCounts   = countByCategory(DECISIONS)
+  const escalationCounts = countByEscalation(DECISIONS)
+  const totalPending     = DECISIONS.length
+
+  const escalationParts: string[] = []
+  if (escalationCounts.critical  > 0) escalationParts.push(`${escalationCounts.critical} critical`)
+  if (escalationCounts.urgent    > 0) escalationParts.push(`${escalationCounts.urgent} urgent`)
+  if (escalationCounts.important > 0) escalationParts.push(`${escalationCounts.important} important`)
 
   return (
     <div className="animate-fade-in max-w-2xl space-y-8 pb-16">
 
       {/* Page header */}
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Decision Inbox</h1>
-        <p className="text-muted-foreground mt-0.5 text-sm">
-          {totalPending} decision{totalPending !== 1 ? 's' : ''} prepared and ready for your review
+        <p className="text-[11px] font-semibold text-muted-foreground/60 uppercase tracking-wider mb-1.5">
+          Prepared by your office — ready for your decision
         </p>
+        <h1 className="text-2xl font-semibold tracking-tight">Decision Inbox</h1>
+        <div className="flex items-center gap-2 flex-wrap mt-1">
+          <p className="text-muted-foreground text-sm">
+            {totalPending} decision{totalPending !== 1 ? 's' : ''} awaiting your approval
+          </p>
+          {escalationParts.length > 0 && (
+            <>
+              <span className="text-muted-foreground/30 text-sm">·</span>
+              <p className="text-xs text-muted-foreground/70">
+                {escalationParts.join(' · ')}
+              </p>
+            </>
+          )}
+        </div>
         <p className="text-sm text-muted-foreground mt-2 leading-relaxed max-w-xl">
-          Each item below has been researched and prepared by your office. The recommendation,
+          Each item has been researched and prepared by your office. The recommendation,
           context, and business impact are ready — you provide the judgement.
         </p>
       </div>

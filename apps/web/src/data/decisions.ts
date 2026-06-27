@@ -4,12 +4,18 @@ export type DecisionCategory   = 'Strategic' | 'Financial' | 'Operational' | 'Pe
 export type DecisionPriority   = 'urgent' | 'today' | 'waiting'
 export type ConfidenceLevel    = 'high' | 'medium' | 'low'
 export type DecisionFilter     = 'urgent' | 'today' | 'waiting' | 'all'
+export type EscalationLevel    = 'important' | 'urgent' | 'critical'
 
 export interface Decision {
   id: string
   title: string
   category: DecisionCategory
   priority: DecisionPriority
+  escalation: EscalationLevel
+  businessImpactSummary: string     // one-line impact
+  actionIfDelayed?: string           // what happens if not decided
+  suggestedDeadline?: string         // "Today" | "This week" | "By Friday"
+  relatedDecisions?: { id: string; title: string; relationship: string }[]
   recommendation: string
   whyItMatters: string
   businessImpact: string
@@ -29,6 +35,14 @@ export const DECISIONS: Decision[] = [
     title: 'Approve Series B term sheet extension request',
     category: 'Strategic',
     priority: 'urgent',
+    escalation: 'critical',
+    businessImpactSummary: 'Series B terms lock in investor veto rights over all VP-level hires',
+    actionIfDelayed: 'Term sheet lapses Friday — no extension possible after that point',
+    suggestedDeadline: 'Today',
+    relatedDecisions: [
+      { id: 'dec-3', title: 'Approve Q3 budget reallocation', relationship: 'Consequent' },
+      { id: 'dec-2', title: 'Confirm Head of Engineering offer', relationship: 'Affected by' },
+    ],
     recommendation: 'Request a 10-day extension from Apex Ventures to review the governance provisions in section 4.2.',
     whyItMatters:
       'Section 4.2 grants investors veto rights over executive hires at VP level and above. Accepting the current terms limits your ability to build the leadership team independently. A 10-day extension is standard practice and Marcus Webb is unlikely to object.',
@@ -50,6 +64,13 @@ export const DECISIONS: Decision[] = [
     title: 'Confirm Head of Engineering offer to David Park',
     category: 'People',
     priority: 'urgent',
+    escalation: 'critical',
+    businessImpactSummary: 'Competing offer expires Friday — restarting search costs 10–14 weeks and $40K',
+    actionIfDelayed: 'David Park accepts competing offer; engineering leadership gap extends to Q1',
+    suggestedDeadline: 'Today',
+    relatedDecisions: [
+      { id: 'dec-5', title: 'Approve Q4 product roadmap', relationship: 'Unblocked by' },
+    ],
     recommendation: 'Confirm the offer: $180K base, 0.8% equity, 4-year vest, start date 1 September.',
     whyItMatters:
       'The engineering team has been operating without a senior leader for 11 weeks. Two product initiatives are delayed as a result. David passed all technical and leadership assessments with high marks — this is the right hire.',
@@ -71,6 +92,13 @@ export const DECISIONS: Decision[] = [
     title: 'Approve Q3 budget reallocation — Marketing to Product',
     category: 'Financial',
     priority: 'today',
+    escalation: 'urgent',
+    businessImpactSummary: 'One-week delay pushes Q4 feature launch by three weeks',
+    actionIfDelayed: 'Engineers cannot be contracted in time for the sprint schedule',
+    suggestedDeadline: 'Today',
+    relatedDecisions: [
+      { id: 'dec-5', title: 'Approve Q4 product roadmap', relationship: 'Prerequisite for' },
+    ],
     recommendation: 'Approve the $200K reallocation from the Q3 marketing reserve to product engineering.',
     whyItMatters:
       'Two critical product features — the API integration layer and the customer dashboard redesign — are blocked waiting on two additional engineers. The marketing reserve was contingency funding that has not been committed.',
@@ -92,6 +120,11 @@ export const DECISIONS: Decision[] = [
     title: 'Approve Meridian Corp contract with exclusivity amendment',
     category: 'External',
     priority: 'today',
+    escalation: 'urgent',
+    businessImpactSummary: '$340K contract at risk if amendment request is not made before their deadline',
+    actionIfDelayed: 'Meridian may proceed with exclusivity clause intact, blocking three pipeline prospects',
+    suggestedDeadline: 'By Friday',
+    relatedDecisions: [],
     recommendation: 'Approve the contract — but require removal of the exclusivity clause in section 7 before signing.',
     whyItMatters:
       'The exclusivity clause prevents working with any of Meridian\'s sector competitors for 18 months. Three of your five growth-stage prospects are in that sector. The contract value ($340K) does not justify the strategic constraint.',
@@ -114,6 +147,10 @@ export const DECISIONS: Decision[] = [
     title: 'Approve Q4 product roadmap — mobile deprioritised',
     category: 'Operational',
     priority: 'today',
+    escalation: 'urgent',
+    businessImpactSummary: 'Delay costs one sprint of planning time across 8 people',
+    actionIfDelayed: 'Engineering and design teams remain blocked from starting Q4 sprint planning',
+    suggestedDeadline: 'This week',
     recommendation: 'Approve the roadmap with the mobile app feature moved to Q1 next year.',
     whyItMatters:
       'Engineering capacity supports either the core performance improvements or the mobile app feature — not both. The performance work directly addresses the top three support complaints and has a higher user impact score.',
@@ -135,6 +172,12 @@ export const DECISIONS: Decision[] = [
     title: 'Respond to James Whitfield\'s request for a one-on-one',
     category: 'External',
     priority: 'waiting',
+    escalation: 'important',
+    businessImpactSummary: 'Unmanaged board tension ahead of the next board call',
+    suggestedDeadline: 'This week',
+    relatedDecisions: [
+      { id: 'dec-1', title: 'Approve Series B term sheet extension', relationship: 'Likely topic' },
+    ],
     recommendation: 'Schedule the meeting for next Tuesday and prepare a Series B and Q3 financials briefing.',
     whyItMatters:
       'James Whitfield has been the quietest board member since the Q3 revenue miss. Proactively engaging him before the board call — rather than waiting for him to raise concerns publicly — is the lower-risk path.',
@@ -157,6 +200,10 @@ export const DECISIONS: Decision[] = [
     title: 'Approve revised sales commission structure — Option B',
     category: 'People',
     priority: 'waiting',
+    escalation: 'important',
+    businessImpactSummary: 'Two AEs actively interviewing — replacement costs $80K each',
+    actionIfDelayed: 'Risk losing two account executives before Q4 pipeline closes',
+    suggestedDeadline: 'This week',
     recommendation: 'Approve structure B: accelerators at 120% and 150% of quota, effective Q4.',
     whyItMatters:
       'Two account executives have signalled they are interviewing externally. The current commission structure is 15% below market median for comparable SaaS AE roles. Replacing each AE costs an estimated $80K in recruiting and ramp time.',
@@ -201,4 +248,12 @@ export function countByCategory(decisions: Decision[]): Partial<Record<DecisionC
     acc[d.category] = (acc[d.category] ?? 0) + 1
     return acc
   }, {})
+}
+
+export function countByEscalation(decisions: Decision[]): Record<EscalationLevel, number> {
+  return {
+    critical:  decisions.filter(d => d.escalation === 'critical').length,
+    urgent:    decisions.filter(d => d.escalation === 'urgent').length,
+    important: decisions.filter(d => d.escalation === 'important').length,
+  }
 }
