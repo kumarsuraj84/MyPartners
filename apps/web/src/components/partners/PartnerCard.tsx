@@ -1,6 +1,9 @@
 'use client'
 import { useState } from 'react'
-import { ChevronDown, ChevronUp, Crown, Mail, RefreshCw, Calendar, Brain, CheckCircle2 } from 'lucide-react'
+import {
+  ChevronDown, ChevronUp, Crown, Mail, RefreshCw, Calendar, Brain,
+  CheckCircle2, AlertCircle, Clock,
+} from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { WhyThisMatters } from './WhyThisMatters'
 import type { Partner, PartnerStatus, WorkState } from '@/data/partners'
@@ -124,7 +127,8 @@ export function PartnerCard({ partner }: PartnerCardProps) {
       {/* Expanded panel */}
       {expanded && (
         <div className="border-t bg-muted/20">
-          {/* Stats */}
+
+          {/* Stats row */}
           <div className="px-4 py-3 flex gap-5 flex-wrap border-b">
             {partner.stats.map(stat => (
               <div key={stat.label} className="flex flex-col gap-0.5">
@@ -133,6 +137,72 @@ export function PartnerCard({ partner }: PartnerCardProps) {
               </div>
             ))}
           </div>
+
+          {/* Needs attention */}
+          {partner.needsAttention && (
+            <div className="px-4 py-3 border-b">
+              <p className="text-[11px] font-semibold text-muted-foreground/70 uppercase tracking-wider mb-2.5">
+                Needs your attention
+              </p>
+              <div className="flex items-start gap-2.5 rounded-lg border border-red-200 bg-red-50/30 px-3 py-2.5">
+                <AlertCircle className="h-3.5 w-3.5 text-red-500 flex-shrink-0 mt-0.5" />
+                <p className="text-xs text-red-800 leading-relaxed">{partner.needsAttention}</p>
+              </div>
+            </div>
+          )}
+
+          {/* Waiting for you */}
+          {partner.waitingForYou && (
+            <div className="px-4 py-3 border-b">
+              <p className="text-[11px] font-semibold text-muted-foreground/70 uppercase tracking-wider mb-2.5">
+                Waiting for your approval
+              </p>
+              <div className="flex items-start gap-2.5 rounded-lg border border-amber-200 bg-amber-50/30 px-3 py-2.5">
+                <Clock className="h-3.5 w-3.5 text-amber-500 flex-shrink-0 mt-0.5" />
+                <p className="text-xs text-amber-800 leading-relaxed">{partner.waitingForYou}</p>
+              </div>
+            </div>
+          )}
+
+          {/* Recently completed */}
+          {partner.recentlyCompleted && partner.recentlyCompleted.length > 0 && (
+            <div className="px-4 py-3 border-b">
+              <p className="text-[11px] font-semibold text-muted-foreground/70 uppercase tracking-wider mb-2.5">
+                Recently completed
+              </p>
+              <div className="space-y-1.5">
+                {partner.recentlyCompleted.map((item, i) => (
+                  <div key={i} className="flex items-start gap-2">
+                    <CheckCircle2 className="h-3.5 w-3.5 text-green-600/60 flex-shrink-0 mt-0.5" />
+                    <p className="text-xs text-foreground/70 leading-relaxed">{item}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Suggested actions */}
+          {partner.suggestedActions && partner.suggestedActions.length > 0 && (
+            <div className="px-4 py-3 border-b">
+              <p className="text-[11px] font-semibold text-muted-foreground/70 uppercase tracking-wider mb-2.5">
+                Suggested next
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {partner.suggestedActions.map(action => (
+                  <a
+                    key={action.id}
+                    href={action.href ?? '#'}
+                    className="inline-flex items-center h-7 px-3 rounded-md text-xs border border-border bg-card hover:bg-accent text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    {action.label}
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Why this matters */}
+          <WhyThisMatters text={partner.whyItMatters} />
 
           {/* Recent activity */}
           <div className="px-4 py-3 space-y-2.5">
@@ -149,8 +219,6 @@ export function PartnerCard({ partner }: PartnerCardProps) {
             ))}
           </div>
 
-          {/* Why this matters */}
-          <WhyThisMatters text={partner.whyItMatters} />
         </div>
       )}
     </div>

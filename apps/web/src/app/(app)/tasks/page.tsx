@@ -132,7 +132,7 @@ export default function WorkPage() {
     <div className="animate-fade-in max-w-2xl space-y-6 pb-16">
 
       <div className="flex items-baseline justify-between">
-        <h1 className="text-2xl font-semibold tracking-tight">Work</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Commitments & Follow-ups</h1>
         <p className="text-sm text-muted-foreground">
           {section === 'needs_me' && items.length > 0 ? `${items.length} need${items.length === 1 ? 's' : ''} you` : ''}
         </p>

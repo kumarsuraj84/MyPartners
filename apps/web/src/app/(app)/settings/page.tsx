@@ -127,8 +127,8 @@ export default function SettingsPage() {
         <SectionLabel>Assistant</SectionLabel>
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-base">AI Engine</CardTitle>
-            <CardDescription>Powers the brief, message reviews, and task suggestions</CardDescription>
+            <CardTitle className="text-base">Your Office</CardTitle>
+            <CardDescription>Reviews your brief, organizes messages, and prepares your follow-ups</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex items-center gap-3">
@@ -136,8 +136,8 @@ export default function SettingsPage() {
                 <Zap className="h-5 w-5 text-blue-600" />
               </div>
               <div>
-                <p className="text-sm font-medium">Groq · Llama 3.3 70B</p>
-                <p className="text-xs text-muted-foreground">Reads and organizes in seconds</p>
+                <p className="text-sm font-medium">Executive Office</p>
+                <p className="text-xs text-muted-foreground">Reviewing, organizing, and preparing on your behalf</p>
               </div>
               <Badge variant="secondary" className="ml-auto text-green-600 bg-green-100">
                 <Check className="h-3 w-3 mr-1" />Active
