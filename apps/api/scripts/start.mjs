@@ -31,4 +31,5 @@ function loadEnv(path) {
 
 loadEnv(resolve(__dir, '../.env'))
 
-await import(resolve(__dir, '../dist/index.js'))
+const entry = new URL('file:///' + resolve(__dir, '../dist/index.js').replace(/\\/g, '/'))
+await import(entry.href)
