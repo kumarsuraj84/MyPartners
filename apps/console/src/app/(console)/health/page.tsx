@@ -101,10 +101,10 @@ export default function HealthPage() {
 
       {overview && (
         <div className="grid grid-cols-4 gap-3">
-          <StatCard label="Total Users" value={overview.users} />
-          <StatCard label="Connectors" value={overview.connectors} />
-          <StatCard label="Running Jobs" value={overview.jobs.running} color={overview.jobs.running > 0 ? 'yellow' : undefined} />
-          <StatCard label="Failed Jobs" value={overview.jobs.failed} color={overview.jobs.failed > 0 ? 'red' : 'green'} />
+          <StatCard label="Total Users" value={overview.users ?? 0} />
+          <StatCard label="Connectors" value={overview.connectors ?? 0} />
+          <StatCard label="Running Jobs" value={overview.jobs?.running ?? 0} color={(overview.jobs?.running ?? 0) > 0 ? 'yellow' : undefined} />
+          <StatCard label="Failed Jobs" value={overview.jobs?.failed ?? 0} color={(overview.jobs?.failed ?? 0) > 0 ? 'red' : 'green'} />
         </div>
       )}
 
