@@ -1,7 +1,9 @@
 'use client'
 import { useState } from 'react'
+import { useMutation } from '@tanstack/react-query'
 import { ChevronDown, ChevronUp, Check, X, MessageSquare, Send, RotateCcw, Calendar, Lightbulb, AlertCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { api } from '@/lib/api'
 import type { ApprovalItem, ApprovalType } from '@/data/partners'
 
 type CardState = 'pending' | 'approved' | 'changes_requested' | 'dismissed'
@@ -41,6 +43,28 @@ export function ApprovalCard({ item }: ApprovalCardProps) {
   const [state, setState] = useState<CardState>('pending')
   const [expanded, setExpanded] = useState(false)
 
+  const approveMutation = useMutation({
+    mutationFn: () => api.post(`/api/approvals/${item.id}/approve`),
+  })
+
+  const dismissMutation = useMutation({
+    mutationFn: () => api.post(`/api/approvals/${item.id}/dismiss`),
+  })
+
+  function handleApprove() {
+    setState('approved')
+    approveMutation.mutate()
+  }
+
+  function handleChangesRequested() {
+    setState('changes_requested')
+  }
+
+  function handleDismiss() {
+    setState('dismissed')
+    dismissMutation.mutate()
+  }
+
   const config = TYPE_CONFIG[item.type]
   const { Icon } = config
 
@@ -59,7 +83,7 @@ export function ApprovalCard({ item }: ApprovalCardProps) {
         <Check className="h-3.5 w-3.5 text-green-600 flex-shrink-0" />
         <div className="flex-1 min-w-0">
           <p className="text-xs font-medium text-green-700">{item.title}</p>
-          <p className="text-[11px] text-green-600/70 mt-0.5">Approved · {item.subject}</p>
+          <p className="text-[11px] text-green-600/70 mt-0.5">Taken Care Of · {item.subject}</p>
         </div>
         <span className="text-[10px] font-semibold text-green-600 bg-green-100 border border-green-200 px-2 py-0.5 rounded-full flex-shrink-0">
           Approved
@@ -137,21 +161,21 @@ export function ApprovalCard({ item }: ApprovalCardProps) {
       {/* Actions */}
       <div className="px-4 pb-3.5 flex items-center gap-2">
         <button
-          onClick={() => setState('approved')}
+          onClick={handleApprove}
           className="h-7 px-3 rounded-md text-xs font-semibold bg-primary text-primary-foreground hover:bg-primary/90 transition-colors flex items-center gap-1.5"
         >
           <Check className="h-3 w-3" />
           Approve
         </button>
         <button
-          onClick={() => setState('changes_requested')}
+          onClick={handleChangesRequested}
           className="h-7 px-3 rounded-md text-xs font-medium border border-border text-foreground hover:bg-accent transition-colors flex items-center gap-1.5"
         >
           <MessageSquare className="h-3 w-3" />
           Request changes
         </button>
         <button
-          onClick={() => setState('dismissed')}
+          onClick={handleDismiss}
           className="h-7 px-2.5 rounded-md text-xs text-muted-foreground hover:text-foreground hover:bg-accent transition-colors ml-auto"
         >
           Dismiss

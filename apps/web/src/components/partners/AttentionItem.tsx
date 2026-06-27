@@ -1,7 +1,9 @@
 'use client'
 import { useState } from 'react'
+import { useMutation } from '@tanstack/react-query'
 import { AlertCircle, Info, X, ChevronDown, ChevronUp } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { api } from '@/lib/api'
 import type { AttentionItemData } from '@/data/partners'
 
 interface AttentionItemProps {
@@ -11,6 +13,15 @@ interface AttentionItemProps {
 export function AttentionItem({ item }: AttentionItemProps) {
   const [dismissed, setDismissed] = useState(false)
   const [expanded, setExpanded] = useState(false)
+
+  const dismissMutation = useMutation({
+    mutationFn: () => api.post(`/api/signals/${item.id}/dismiss`),
+  })
+
+  function handleDismiss() {
+    setDismissed(true)
+    dismissMutation.mutate()
+  }
 
   if (dismissed) {
     return (
@@ -82,7 +93,7 @@ export function AttentionItem({ item }: AttentionItemProps) {
         </div>
 
         <button
-          onClick={() => setDismissed(true)}
+          onClick={handleDismiss}
           className="flex-shrink-0 text-muted-foreground/50 hover:text-muted-foreground transition-colors mt-0.5"
           aria-label="Dismiss"
         >

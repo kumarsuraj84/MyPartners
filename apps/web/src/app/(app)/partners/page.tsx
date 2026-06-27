@@ -1,13 +1,14 @@
 'use client'
-import { PARTNERS, APPROVAL_ITEMS, ATTENTION_ITEMS } from '@/data/partners'
+import { useQuery } from '@tanstack/react-query'
+import { PARTNERS, APPROVAL_ITEMS, ATTENTION_ITEMS, ALL_ACTIVITIES } from '@/data/partners'
+import type { ApprovalItem, AttentionItemData, PartnerActivity, Partner } from '@/data/partners'
+import { api } from '@/lib/api'
 import { ExecutiveOfficeHeader } from '@/components/partners/ExecutiveOfficeHeader'
 import { PartnerCard } from '@/components/partners/PartnerCard'
 import { PartnerActivityFeed } from '@/components/partners/PartnerActivityFeed'
 import { ApprovalCard } from '@/components/partners/ApprovalCard'
 import { AttentionItem } from '@/components/partners/AttentionItem'
 import { CheckCircle2 } from 'lucide-react'
-import { useApprovalItems, useTaskStats } from '@/hooks/use-partners-data'
-import type { Partner } from '@/data/partners'
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
@@ -40,20 +41,81 @@ function SectionLabelWithCount({ children, count, accent }: {
   )
 }
 
-/**
- * Merge live task stats into the Follow-up Partner card so counts are real.
- * All other partners keep their static mock data — EOS language is preserved.
- */
+// ── API response shapes ────────────────────────────────────────────────────────
+
+interface ApiApproval {
+  id: string
+  type: string
+  title: string
+  preparedBy?: string
+  preparedById?: string
+  subject?: string
+  preview?: string
+  urgency?: 'urgent' | 'normal'
+  preparedAt?: string
+  estimatedTime?: string
+}
+
+interface ApiAttention {
+  id: string
+  title: string
+  reason?: string
+  partnerId?: string
+  partnerName?: string
+  actionNeeded?: string
+  urgency?: 'high' | 'normal'
+}
+
+interface ApiActivity {
+  id: string
+  time?: string
+  description?: string
+  partnerId?: string
+  partnerName?: string
+}
+
+interface ApiTaskStats {
+  overdue: number
+  commitments: number
+  waiting_for: number
+}
+
+// ── Mappers ───────────────────────────────────────────────────────────────────
+
+function toApprovalItem(a: ApiApproval): ApprovalItem {
+  return {
+    id: a.id,
+    type: (a.type as ApprovalItem['type']) ?? 'recommendation',
+    title: a.title,
+    preparedBy: a.preparedBy ?? '',
+    preparedById: a.preparedById ?? '',
+    subject: a.subject ?? '',
+    preview: a.preview ?? '',
+    urgency: a.urgency ?? 'normal',
+    preparedAt: a.preparedAt ?? '',
+  }
+}
+
+function toAttentionItem(a: ApiAttention): AttentionItemData {
+  return {
+    id: a.id,
+    title: a.title,
+    reason: a.reason ?? '',
+    partnerId: a.partnerId ?? '',
+    partnerName: a.partnerName ?? '',
+    actionNeeded: a.actionNeeded ?? '',
+    urgency: a.urgency ?? 'normal',
+  }
+}
+
 function applyTaskStats(
   partners: Partner[],
-  stats: { overdue: number; commitments: number; waiting_for: number } | undefined
+  stats: ApiTaskStats | undefined
 ): Partner[] {
   if (!stats) return partners
   return partners.map(p => {
     if (p.id !== 'followup') return p
-    const overdue = stats.overdue
-    const commitments = stats.commitments
-    const waitingFor = stats.waiting_for
+    const { overdue, commitments, waiting_for: waitingFor } = stats
     return {
       ...p,
       stats: [
@@ -71,20 +133,53 @@ function applyTaskStats(
 }
 
 export default function PartnersPage() {
-  const { data: liveApprovals, isError: approvalsError } = useApprovalItems()
-  const { data: taskStats } = useTaskStats()
+  const { data: approvalData } = useQuery<ApiApproval[]>({
+    queryKey: ['approvals'],
+    queryFn: () => api.get<ApiApproval[]>('/api/approvals'),
+    retry: false,
+  })
 
-  // Use live approvals when available and non-empty; fall back to mock data
-  const approvalItems =
-    !approvalsError && liveApprovals && liveApprovals.length > 0
-      ? liveApprovals
-      : APPROVAL_ITEMS
+  const { data: attentionData } = useQuery<ApiAttention[]>({
+    queryKey: ['attention'],
+    queryFn: () => api.get<ApiAttention[]>('/api/attention'),
+    retry: false,
+  })
+
+  const { data: activityData } = useQuery<ApiActivity[]>({
+    queryKey: ['partners-activity'],
+    queryFn: () => api.get<ApiActivity[]>('/api/partners/activity'),
+    retry: false,
+  })
+
+  const { data: taskStats } = useQuery<ApiTaskStats>({
+    queryKey: ['task-stats'],
+    queryFn: () => api.get<ApiTaskStats>('/api/partners/stats'),
+    retry: false,
+  })
+
+  const approvalItems: ApprovalItem[] = approvalData
+    ? approvalData.map(toApprovalItem)
+    : APPROVAL_ITEMS
+
+  const attentionItems: AttentionItemData[] = attentionData
+    ? attentionData.map(toAttentionItem)
+    : ATTENTION_ITEMS
+
+  const _activities: PartnerActivity[] = activityData
+    ? activityData.map(a => ({
+        id: a.id,
+        time: a.time ?? '',
+        description: a.description ?? '',
+        partnerId: a.partnerId ?? '',
+        partnerName: a.partnerName ?? '',
+      }))
+    : ALL_ACTIVITIES
 
   const partners = applyTaskStats(PARTNERS, taskStats)
 
-  const waitingPartners  = partners.filter(p => p.workState === 'waiting').length
-  const attentionCount   = ATTENTION_ITEMS.length
-  const approvalCount    = approvalItems.length
+  const waitingPartners = partners.filter(p => p.workState === 'waiting').length
+  const approvalCount   = approvalItems.length
+  const attentionCount  = attentionItems.length
 
   return (
     <div className="animate-fade-in max-w-2xl space-y-10 pb-16">
@@ -92,10 +187,10 @@ export default function PartnersPage() {
       {/* Office Header + Summary */}
       <ExecutiveOfficeHeader />
 
-      {/* YOUR REVIEW ─────────────────────────────────────────── */}
+      {/* WAITING FOR YOUR APPROVAL ───────────────────────────────── */}
       <section>
         <SectionLabelWithCount count={approvalCount} accent>
-          Your review
+          Waiting for your Approval
         </SectionLabelWithCount>
         <div className="space-y-2">
           {approvalItems.map(item => (
@@ -104,13 +199,13 @@ export default function PartnersPage() {
         </div>
       </section>
 
-      {/* NEEDS YOUR ATTENTION ────────────────────────────────── */}
+      {/* NEEDS ATTENTION ─────────────────────────────────────────── */}
       <section>
         <SectionLabelWithCount count={attentionCount}>
-          Needs your attention
+          Needs Attention
         </SectionLabelWithCount>
         <div className="space-y-2">
-          {ATTENTION_ITEMS.map(item => (
+          {attentionItems.map(item => (
             <AttentionItem key={item.id} item={item} />
           ))}
         </div>
@@ -122,7 +217,7 @@ export default function PartnersPage() {
         )}
       </section>
 
-      {/* YOUR PARTNERS ───────────────────────────────────────── */}
+      {/* YOUR PARTNERS ───────────────────────────────────────────── */}
       <section>
         <SectionLabelWithCount count={waitingPartners}>
           Your partners
@@ -134,7 +229,7 @@ export default function PartnersPage() {
         </div>
       </section>
 
-      {/* RECENT ACTIVITY ─────────────────────────────────────── */}
+      {/* RECENT ACTIVITY ─────────────────────────────────────────── */}
       <section>
         <SectionLabel>Recent office activity</SectionLabel>
         <PartnerActivityFeed />
