@@ -1,4 +1,5 @@
 'use client'
+import { useState, useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { useAuth } from '@/hooks/use-auth'
@@ -9,6 +10,46 @@ import { Mail, MessageSquare, Check, Zap, Bell, Clock, Shield, Users, ToggleLeft
 
 interface Integration {
   id: string; provider: string; isActive: boolean; createdAt: string
+}
+
+interface ConfigData {
+  notifications?: {
+    urgentEmailEnabled?: boolean
+    dailyBriefTime?: string
+    weeklyDigestEnabled?: boolean
+    digestDayOfWeek?: number
+  }
+  brief?: {
+    urgentMessagesLimit?: number
+    decisionsLimit?: number
+    commitmentsLimit?: number
+    followUpsLimit?: number
+  }
+  business_hours?: {
+    timezone?: string
+    startHour?: number
+    endHour?: number
+  }
+}
+
+const CONFIG_DEFAULTS: ConfigData = {
+  notifications: {
+    urgentEmailEnabled: false,
+    dailyBriefTime: '08:00',
+    weeklyDigestEnabled: false,
+    digestDayOfWeek: 1,
+  },
+  brief: {
+    urgentMessagesLimit: 8,
+    decisionsLimit: 5,
+    commitmentsLimit: 5,
+    followUpsLimit: 5,
+  },
+  business_hours: {
+    timezone: 'UTC',
+    startHour: 9,
+    endHour: 18,
+  },
 }
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
@@ -32,13 +73,35 @@ function ComingSoonRow({ icon, title, description }: { icon: React.ReactNode; ti
   )
 }
 
+function SavedBadge({ visible }: { visible: boolean }) {
+  if (!visible) return null
+  return (
+    <span className="text-xs text-green-600 font-medium flex items-center gap-1">
+      <Check className="h-3 w-3" />Saved to your profile.
+    </span>
+  )
+}
+
 export default function SettingsPage() {
   const { user } = useAuth()
   const qc = useQueryClient()
+  const [savedKeys, setSavedKeys] = useState<Record<string, boolean>>({})
 
   const { data: integrations = [] } = useQuery<Integration[]>({
     queryKey: ['integrations'],
     queryFn: () => api.get('/api/integrations'),
+  })
+
+  const { data: configData } = useQuery<ConfigData>({
+    queryKey: ['config'],
+    queryFn: async () => {
+      try {
+        return await api.get<ConfigData>('/api/config')
+      } catch {
+        return CONFIG_DEFAULTS
+      }
+    },
+    placeholderData: CONFIG_DEFAULTS,
   })
 
   const disconnect = useMutation({
@@ -46,13 +109,69 @@ export default function SettingsPage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['integrations'] }),
   })
 
+  const saveConfig = useMutation({
+    mutationFn: ({ category, key, value }: { category: string; key: string; value: unknown }) =>
+      api.put(`/api/config/${category}/${key}`, { value }),
+    onSuccess: (_data, { category, key }) => {
+      const savedKey = `${category}.${key}`
+      setSavedKeys(prev => ({ ...prev, [savedKey]: true }))
+      setTimeout(() => {
+        setSavedKeys(prev => ({ ...prev, [savedKey]: false }))
+      }, 3000)
+      qc.invalidateQueries({ queryKey: ['config'] })
+    },
+  })
+
+  const handleConfigChange = useCallback(
+    (category: string, key: string, value: unknown) => {
+      saveConfig.mutate({ category, key, value })
+    },
+    [saveConfig],
+  )
+
+  const cfg = configData ?? CONFIG_DEFAULTS
   const gmailIntegration = integrations.find(i => i.provider === 'gmail')
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
+
+  const digestOptions = [
+    { value: 'daily', label: 'Daily' },
+    { value: 'weekly', label: 'Weekly' },
+    { value: 'off', label: 'Off' },
+  ] as const
+
+  // Derive digest frequency from config
+  const digestFrequency: 'daily' | 'weekly' | 'off' =
+    cfg.notifications?.weeklyDigestEnabled
+      ? 'weekly'
+      : cfg.notifications?.urgentEmailEnabled
+        ? 'daily'
+        : 'off'
+
+  const handleDigestChange = (val: 'daily' | 'weekly' | 'off') => {
+    if (val === 'weekly') {
+      handleConfigChange('notifications', 'weeklyDigestEnabled', true)
+      handleConfigChange('notifications', 'urgentEmailEnabled', false)
+    } else if (val === 'daily') {
+      handleConfigChange('notifications', 'weeklyDigestEnabled', false)
+      handleConfigChange('notifications', 'urgentEmailEnabled', true)
+    } else {
+      handleConfigChange('notifications', 'weeklyDigestEnabled', false)
+      handleConfigChange('notifications', 'urgentEmailEnabled', false)
+    }
+  }
+
+  const briefTimeOptions = [
+    { value: '06:00', label: '6:00 AM' },
+    { value: '07:00', label: '7:00 AM' },
+    { value: '08:00', label: '8:00 AM' },
+    { value: '09:00', label: '9:00 AM' },
+    { value: '10:00', label: '10:00 AM' },
+  ]
 
   return (
     <div className="animate-fade-in space-y-10 max-w-2xl">
       <div>
-        <h1 className="text-2xl font-semibold">Settings</h1>
+        <h1 className="text-2xl font-semibold">Your preferences</h1>
         <p className="text-muted-foreground mt-1">Configure your assistant</p>
       </div>
 
@@ -122,6 +241,64 @@ export default function SettingsPage() {
         </div>
       </section>
 
+      {/* Notification Preferences */}
+      <section>
+        <SectionLabel>Notification preferences</SectionLabel>
+        <Card>
+          <CardContent className="p-5 space-y-5">
+            {/* Digest frequency */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <div>
+                  <p className="text-sm font-medium">Digest frequency</p>
+                  <p className="text-xs text-muted-foreground">How often your assistant sends a roundup</p>
+                </div>
+                <SavedBadge visible={
+                  savedKeys['notifications.weeklyDigestEnabled'] === true ||
+                  savedKeys['notifications.urgentEmailEnabled'] === true
+                } />
+              </div>
+              <div className="flex gap-2 flex-wrap">
+                {digestOptions.map(opt => (
+                  <button
+                    key={opt.value}
+                    onClick={() => handleDigestChange(opt.value)}
+                    className={[
+                      'px-3 py-1.5 rounded-md text-sm border transition-colors',
+                      digestFrequency === opt.value
+                        ? 'bg-primary text-primary-foreground border-primary'
+                        : 'bg-background border-border hover:bg-muted',
+                    ].join(' ')}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Brief generation time */}
+            <div className="border-t pt-4">
+              <div className="flex items-center justify-between mb-2">
+                <div>
+                  <p className="text-sm font-medium">Brief generation time</p>
+                  <p className="text-xs text-muted-foreground">When your morning brief is prepared each day</p>
+                </div>
+                <SavedBadge visible={savedKeys['notifications.dailyBriefTime'] === true} />
+              </div>
+              <select
+                value={cfg.notifications?.dailyBriefTime ?? '08:00'}
+                onChange={e => handleConfigChange('notifications', 'dailyBriefTime', e.target.value)}
+                className="text-sm border border-border rounded-md px-3 py-1.5 bg-background focus:outline-none focus:ring-1 focus:ring-primary"
+              >
+                {briefTimeOptions.map(opt => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
+            </div>
+          </CardContent>
+        </Card>
+      </section>
+
       {/* Assistant */}
       <section>
         <SectionLabel>Assistant</SectionLabel>
@@ -159,33 +336,9 @@ export default function SettingsPage() {
         </Card>
       </section>
 
-      {/* Notifications */}
-      <section>
-        <SectionLabel>Notifications</SectionLabel>
-        <Card>
-          <CardContent className="p-5">
-            <ComingSoonRow
-              icon={<Bell className="h-4 w-4" />}
-              title="Urgent alerts"
-              description="Notified immediately when something critical arrives"
-            />
-            <ComingSoonRow
-              icon={<Clock className="h-4 w-4" />}
-              title="Morning brief"
-              description="Daily summary delivered at your preferred time"
-            />
-            <ComingSoonRow
-              icon={<Bell className="h-4 w-4" />}
-              title="Digest"
-              description="Periodic roundup of what your assistant handled"
-            />
-          </CardContent>
-        </Card>
-      </section>
-
       {/* Business Hours */}
       <section>
-        <SectionLabel>Business Hours</SectionLabel>
+        <SectionLabel>Business hours</SectionLabel>
         <Card>
           <CardContent className="p-5">
             <ComingSoonRow
