@@ -1,7 +1,9 @@
-import type React from 'react'
+'use client'
+import { useState, useEffect } from 'react'
 import { DECISIONS, countByCategory, countByEscalation } from '@/data/decisions'
+import type { Decision, DecisionCategory } from '@/data/decisions'
 import { DecisionInbox } from '@/components/decisions/DecisionInbox'
-import type { DecisionCategory } from '@/data/decisions'
+import { api } from '@/lib/api'
 
 const CATEGORY_STYLES: Record<DecisionCategory, string> = {
   Strategic:   'bg-blue-50 text-blue-700 border-blue-200',
@@ -19,25 +21,35 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   )
 }
 
-async function fetchDecisionsCount(): Promise<number> {
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const apiUrl: string = (globalThis as any).process?.env?.NEXT_PUBLIC_API_URL ?? ''
-    const res = await fetch(`${apiUrl}/api/brief`, { cache: 'no-store' })
-    if (res.ok) {
-      const data = await res.json()
-      if (typeof data?.decisionsNeeded === 'number') return data.decisionsNeeded
-    }
-  } catch {
-    // fall through to local data
-  }
-  return DECISIONS.length
-}
+export default function DecisionsPage() {
+  const [decisions, setDecisions]   = useState<Decision[]>([])
+  const [loading, setLoading]       = useState(true)
+  const [refreshedAt, setRefreshedAt] = useState<string | null>(null)
 
-export default async function DecisionsPage() {
-  const categoryCounts   = countByCategory(DECISIONS)
-  const escalationCounts = countByEscalation(DECISIONS)
-  const totalPending     = await fetchDecisionsCount()
+  useEffect(() => {
+    api.get<Decision[]>('/api/decisions')
+      .then(data => {
+        setDecisions(data && data.length > 0 ? data : DECISIONS)
+        setRefreshedAt('just now')
+      })
+      .catch(() => {
+        setDecisions(DECISIONS)
+        setRefreshedAt(DECISIONS[0]?.preparedAt ?? null)
+      })
+      .finally(() => setLoading(false))
+  }, [])
+
+  if (loading) {
+    return (
+      <div className="animate-fade-in max-w-2xl pb-16 pt-8">
+        <p className="text-sm text-muted-foreground">Your office is preparing the decision briefing.</p>
+      </div>
+    )
+  }
+
+  const categoryCounts   = countByCategory(decisions)
+  const escalationCounts = countByEscalation(decisions)
+  const totalPending     = decisions.length
 
   const escalationParts: string[] = []
   if (escalationCounts.critical  > 0) escalationParts.push(`${escalationCounts.critical} critical`)
@@ -62,6 +74,14 @@ export default async function DecisionsPage() {
               <span className="text-muted-foreground/30 text-sm">·</span>
               <p className="text-xs text-muted-foreground/70">
                 {escalationParts.join(' · ')}
+              </p>
+            </>
+          )}
+          {refreshedAt && (
+            <>
+              <span className="text-muted-foreground/30 text-sm">·</span>
+              <p className="text-[11px] text-muted-foreground/50">
+                Refreshed {refreshedAt}
               </p>
             </>
           )}
@@ -91,7 +111,7 @@ export default async function DecisionsPage() {
       {/* Inbox */}
       <div>
         <SectionLabel>Pending decisions</SectionLabel>
-        <DecisionInbox decisions={DECISIONS} />
+        <DecisionInbox decisions={decisions} />
       </div>
 
     </div>
