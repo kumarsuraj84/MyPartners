@@ -5,10 +5,11 @@ import { PageHeader, StatCard } from '@/components/ui'
 
 interface HealthRes {
   status: string
-  uptime: number
-  db: { status: string; latencyMs?: number }
-  ai: { status: string; provider?: string }
-  memory: { heapUsedMb: number; heapTotalMb: number }
+  db: string | { status: string; latencyMs?: number }
+  uptime?: number
+  ai?: { status: string; provider?: string }
+  memory?: { heapUsedMb: number; heapTotalMb: number }
+  timestamp?: string
 }
 
 interface OverviewRes {
@@ -35,14 +36,15 @@ export default function HealthPage() {
     refetchInterval: 15_000,
   })
 
-  const dbOk = health?.db?.status === 'ok'
+  const dbStatus = typeof health?.db === 'object' ? health.db.status : health?.db
+  const dbOk = dbStatus === 'ok'
   const aiOk = health?.ai?.status === 'ok'
   const apiOk = !healthLoading && !!health
 
-  const uptimeHours = health ? Math.floor(health.uptime / 3600) : 0
-  const uptimeMins = health ? Math.floor((health.uptime % 3600) / 60) : 0
+  const uptimeHours = health?.uptime ? Math.floor(health.uptime / 3600) : 0
+  const uptimeMins = health?.uptime ? Math.floor((health.uptime % 3600) / 60) : 0
 
-  const heapPct = health
+  const heapPct = health?.memory
     ? Math.round((health.memory.heapUsedMb / health.memory.heapTotalMb) * 100)
     : 0
 
@@ -61,11 +63,11 @@ export default function HealthPage() {
               <StatusDot ok={apiOk} />
               <span className="text-zinc-700">{apiOk ? 'Healthy' : 'Unreachable'}</span>
             </div>
-            {health && (
-              <>
-                <div className="text-zinc-400">Uptime {uptimeHours}h {uptimeMins}m</div>
-                <div className="text-zinc-400">Heap {health.memory.heapUsedMb}MB / {health.memory.heapTotalMb}MB ({heapPct}%)</div>
-              </>
+            {health?.uptime !== undefined && (
+              <div className="text-zinc-400">Uptime {uptimeHours}h {uptimeMins}m</div>
+            )}
+            {health?.memory && (
+              <div className="text-zinc-400">Heap {health.memory.heapUsedMb}MB / {health.memory.heapTotalMb}MB ({heapPct}%)</div>
             )}
           </div>
         </div>
