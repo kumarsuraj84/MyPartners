@@ -1,4 +1,4 @@
-'use client'
+import type React from 'react'
 import { DECISIONS, countByCategory, countByEscalation } from '@/data/decisions'
 import { DecisionInbox } from '@/components/decisions/DecisionInbox'
 import type { DecisionCategory } from '@/data/decisions'
@@ -19,10 +19,25 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   )
 }
 
-export default function DecisionsPage() {
+async function fetchDecisionsCount(): Promise<number> {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const apiUrl: string = (globalThis as any).process?.env?.NEXT_PUBLIC_API_URL ?? ''
+    const res = await fetch(`${apiUrl}/api/brief`, { cache: 'no-store' })
+    if (res.ok) {
+      const data = await res.json()
+      if (typeof data?.decisionsNeeded === 'number') return data.decisionsNeeded
+    }
+  } catch {
+    // fall through to local data
+  }
+  return DECISIONS.length
+}
+
+export default async function DecisionsPage() {
   const categoryCounts   = countByCategory(DECISIONS)
   const escalationCounts = countByEscalation(DECISIONS)
-  const totalPending     = DECISIONS.length
+  const totalPending     = await fetchDecisionsCount()
 
   const escalationParts: string[] = []
   if (escalationCounts.critical  > 0) escalationParts.push(`${escalationCounts.critical} critical`)
@@ -40,7 +55,7 @@ export default function DecisionsPage() {
         <h1 className="text-2xl font-semibold tracking-tight">Decision Inbox</h1>
         <div className="flex items-center gap-2 flex-wrap mt-1">
           <p className="text-muted-foreground text-sm">
-            {totalPending} decision{totalPending !== 1 ? 's' : ''} awaiting your approval
+            {totalPending} decision{totalPending !== 1 ? 's' : ''} prepared and ready for your review
           </p>
           {escalationParts.length > 0 && (
             <>

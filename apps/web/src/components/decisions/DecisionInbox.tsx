@@ -8,7 +8,7 @@ import { CheckCircle2 } from 'lucide-react'
 
 const FILTER_LABELS: Record<DecisionFilter, string> = {
   urgent:  'Urgent',
-  today:   'Today',
+  today:   'Needs Today',
   waiting: 'Waiting',
   all:     'All',
 }
@@ -24,7 +24,6 @@ export function DecisionInbox({ decisions }: DecisionInboxProps) {
   const escalationCounts = countByEscalation(decisions)
   const filtered       = filterDecisions(decisions, activeFilter)
 
-  // Today tab label shows urgent + today count
   const todayCount = counts['today']
 
   return (
@@ -64,10 +63,6 @@ export function DecisionInbox({ decisions }: DecisionInboxProps) {
         {(['urgent', 'today', 'waiting', 'all'] as DecisionFilter[]).map(filter => {
           const count    = counts[filter]
           const isActive = filter === activeFilter
-          const label    = filter === 'today'
-            ? `Today (${todayCount})`
-            : FILTER_LABELS[filter]
-
           return (
             <button
               key={filter}
@@ -79,22 +74,18 @@ export function DecisionInbox({ decisions }: DecisionInboxProps) {
                   : 'text-muted-foreground hover:text-foreground',
               )}
             >
-              {filter === 'today' ? label : (
-                <>
-                  {FILTER_LABELS[filter]}
-                  {count > 0 && (
-                    <span className={cn(
-                      'text-[10px] font-bold tabular-nums px-1 py-px rounded-full min-w-[16px] text-center',
-                      isActive
-                        ? filter === 'urgent'
-                          ? 'bg-red-100 text-red-600'
-                          : 'bg-primary/10 text-primary'
-                        : 'bg-muted-foreground/15 text-muted-foreground',
-                    )}>
-                      {count}
-                    </span>
-                  )}
-                </>
+              {FILTER_LABELS[filter]}
+              {count > 0 && (
+                <span className={cn(
+                  'text-[10px] font-bold tabular-nums px-1 py-px rounded-full min-w-[16px] text-center',
+                  isActive
+                    ? filter === 'urgent'
+                      ? 'bg-red-100 text-red-600'
+                      : 'bg-primary/10 text-primary'
+                    : 'bg-muted-foreground/15 text-muted-foreground',
+                )}>
+                  {count}
+                </span>
               )}
             </button>
           )
@@ -106,7 +97,7 @@ export function DecisionInbox({ decisions }: DecisionInboxProps) {
         <div className="flex items-center gap-3 px-4 py-8 rounded-xl border bg-card text-center justify-center">
           <CheckCircle2 className="h-4 w-4 text-green-500 flex-shrink-0" />
           <p className="text-xs text-muted-foreground">
-            No {activeFilter === 'all' ? '' : FILTER_LABELS[activeFilter].toLowerCase() + ' '}decisions pending.
+            No {activeFilter === 'all' ? '' : (activeFilter === 'today' ? 'decisions needed today' : FILTER_LABELS[activeFilter].toLowerCase() + ' decisions')} pending.
           </p>
         </div>
       ) : (

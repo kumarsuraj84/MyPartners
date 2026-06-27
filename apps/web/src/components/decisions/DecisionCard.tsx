@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   ChevronDown, ChevronUp, Check, MessageSquare, Clock,
   CheckCircle2, MinusCircle, Scale,
@@ -57,6 +57,13 @@ interface DecisionCardProps {
 export function DecisionCard({ decision: d }: DecisionCardProps) {
   const [state, setState]       = useState<CardState>('pending')
   const [expanded, setExpanded] = useState(false)
+  const [showToast, setShowToast] = useState(false)
+
+  useEffect(() => {
+    if (!showToast) return
+    const t = setTimeout(() => setShowToast(false), 2500)
+    return () => clearTimeout(t)
+  }, [showToast])
 
   const catStyle = CATEGORY_STYLES[d.category]
   const escStyle = ESCALATION_STYLES[d.escalation]
@@ -247,12 +254,19 @@ export function DecisionCard({ decision: d }: DecisionCardProps) {
         expanded ? 'border-t' : '',
       )}>
         <button
-          onClick={() => setState('approved')}
+          onClick={() => { setState('approved'); setShowToast(true) }}
           className="h-8 px-3.5 rounded-lg text-xs font-semibold bg-primary text-primary-foreground hover:bg-primary/90 transition-colors flex items-center gap-1.5"
         >
           <Check className="h-3.5 w-3.5" />
           Approve
         </button>
+        {/* Decision recorded toast */}
+        {showToast && (
+          <span className="ml-auto flex items-center gap-1.5 text-[11px] font-medium text-green-700 bg-green-50 border border-green-200 px-2.5 py-1 rounded-full animate-fade-in">
+            <CheckCircle2 className="h-3 w-3 flex-shrink-0" />
+            Decision recorded
+          </span>
+        )}
         <button
           onClick={() => setState('changes_requested')}
           className="h-8 px-3.5 rounded-lg text-xs font-medium border border-border bg-background text-foreground hover:bg-accent transition-colors flex items-center gap-1.5"
