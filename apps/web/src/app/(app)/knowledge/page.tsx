@@ -13,6 +13,65 @@ import {
   type MemoryProject,
   type MemoryDecision,
 } from '@/data/mockMemory'
+
+// ─── API response shapes ───────────────────────────────────────────────────────
+
+interface ApiPerson {
+  id: string
+  name: string
+  role: string | null
+  company: string | null
+  email: string | null
+  updatedAt: string
+  relationship: string | null
+  notes: string | null
+  organizationId: string | null
+  organization?: { id: string; name: string } | null
+}
+
+interface ApiOrganization {
+  id: string
+  name: string
+  domain: string | null
+  type: string | null
+  description: string | null
+  updatedAt: string
+  _count: { persons: number; projects: number }
+}
+
+// ─── Normalise API → MemoryPerson ──────────────────────────────────────────────
+
+function normalisePersons(apiPersons: ApiPerson[]): MemoryPerson[] {
+  return apiPersons.map(p => ({
+    id: p.id,
+    name: p.name,
+    role: p.role ?? '',
+    company: p.company ?? (p.organization?.name ?? 'External'),
+    email: p.email ?? '',
+    lastContact: new Date(p.updatedAt).toLocaleDateString('en-GB', {
+      day: 'numeric', month: 'short',
+    }),
+    relationship: p.relationship ?? '',
+    notes: p.notes ?? '',
+    linkedOrgId: p.organizationId ?? undefined,
+  }))
+}
+
+// ─── Normalise API → MemoryOrganization ───────────────────────────────────────
+
+function normaliseOrganizations(apiOrgs: ApiOrganization[]): MemoryOrganization[] {
+  const VALID_TYPES = ['investor', 'client', 'partner', 'vendor'] as const
+  type OrgType = typeof VALID_TYPES[number]
+  return apiOrgs.map(o => ({
+    id: o.id,
+    name: o.name,
+    domain: o.domain ?? '',
+    type: (VALID_TYPES.includes(o.type as OrgType) ? o.type : 'vendor') as OrgType,
+    contactCount: o._count.persons,
+    notes: o.description ?? '',
+    linkedProjects: [],
+  }))
+}
 import {
   User,
   Building2,
@@ -135,7 +194,28 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 // ─── People tab ────────────────────────────────────────────────────────────────
 
 function PeopleTab({ search }: { search: string }) {
-  const items = MOCK_PERSONS.filter(
+  const { data: apiData, isLoading, isError } = useQuery<ApiPerson[]>({
+    queryKey: ['memory', 'persons'],
+    queryFn: async () => {
+      const res = await fetch('/api/memory/persons')
+      if (!res.ok) throw new Error('unavailable')
+      return res.json()
+    },
+    retry: false,
+    staleTime: 60_000,
+  })
+
+  if (isLoading) {
+    return (
+      <div className="rounded-xl border bg-card px-4 py-5">
+        <p className="text-xs text-muted-foreground">Your office is retrieving this information.</p>
+      </div>
+    )
+  }
+
+  const source = isError || !apiData ? MOCK_PERSONS : normalisePersons(apiData)
+
+  const items = source.filter(
     p =>
       !search ||
       p.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -171,10 +251,10 @@ function PeopleTab({ search }: { search: string }) {
   )
 }
 
-function PersonCard({ person: p }: { person: MemoryPerson }) {
-  const linkedOrg = p.linkedOrgId
-    ? MOCK_ORGANIZATIONS.find(o => o.id === p.linkedOrgId)
-    : null
+function PersonCard({ person: p, orgName }: { person: MemoryPerson; orgName?: string }) {
+  const linkedOrgName = orgName ?? (p.linkedOrgId
+    ? MOCK_ORGANIZATIONS.find(o => o.id === p.linkedOrgId)?.name
+    : undefined)
 
   return (
     <div className="rounded-xl border bg-card overflow-hidden border-l-[3px] border-l-primary/30">
@@ -184,10 +264,10 @@ function PersonCard({ person: p }: { person: MemoryPerson }) {
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <EntityChip type="person" label={p.name} />
-              {linkedOrg && (
+              {linkedOrgName && (
                 <span className="inline-flex items-center gap-0.5 text-[11px] text-muted-foreground hover:text-foreground transition-colors cursor-default">
                   <ArrowUpRight className="h-2.5 w-2.5" />
-                  {linkedOrg.name}
+                  {linkedOrgName}
                 </span>
               )}
             </div>
@@ -216,7 +296,28 @@ function PersonCard({ person: p }: { person: MemoryPerson }) {
 // ─── Organisations tab ────────────────────────────────────────────────────────
 
 function OrganisationsTab({ search }: { search: string }) {
-  const items = MOCK_ORGANIZATIONS.filter(
+  const { data: apiData, isLoading, isError } = useQuery<ApiOrganization[]>({
+    queryKey: ['memory', 'organizations'],
+    queryFn: async () => {
+      const res = await fetch('/api/memory/organizations')
+      if (!res.ok) throw new Error('unavailable')
+      return res.json()
+    },
+    retry: false,
+    staleTime: 60_000,
+  })
+
+  if (isLoading) {
+    return (
+      <div className="rounded-xl border bg-card px-4 py-5">
+        <p className="text-xs text-muted-foreground">Your office is retrieving this information.</p>
+      </div>
+    )
+  }
+
+  const source = isError || !apiData ? MOCK_ORGANIZATIONS : normaliseOrganizations(apiData)
+
+  const items = source.filter(
     o =>
       !search ||
       o.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -281,15 +382,91 @@ function OrgCard({ org: o }: { org: MemoryOrganization }) {
   )
 }
 
+// ─── API shapes for search results ────────────────────────────────────────────
+
+interface ApiProject {
+  id: string
+  name: string
+  status: string | null
+  description: string | null
+  updatedAt: string
+  organization?: { id: string; name: string } | null
+  _count?: { decisions: number }
+}
+
+interface ApiDecision {
+  id: string
+  title: string
+  description: string | null
+  madeAt: string
+  outcome: string | null
+  project?: { id: string; name: string } | null
+}
+
+interface ApiSearchResult {
+  projects: ApiProject[]
+  decisions: ApiDecision[]
+}
+
+function normaliseProjects(apiProjects: ApiProject[]): MemoryProject[] {
+  const VALID_STATUS = ['active', 'paused', 'closed'] as const
+  type Status = typeof VALID_STATUS[number]
+  return apiProjects.map(p => ({
+    id: p.id,
+    name: p.name,
+    status: (VALID_STATUS.includes(p.status as Status) ? p.status : 'active') as Status,
+    owner: p.organization?.name ?? 'Unassigned',
+    notes: p.description ?? '',
+    linkedOrgId: p.organization?.id,
+    decisions: [],
+  }))
+}
+
+function normaliseDecisions(apiDecisions: ApiDecision[]): MemoryDecision[] {
+  return apiDecisions.map(d => ({
+    id: d.id,
+    title: d.title,
+    date: new Date(d.madeAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }),
+    outcome: d.outcome ?? d.description ?? '',
+    linkedProject: d.project?.id,
+    madeBy: d.project?.name ?? 'Unrecorded',
+    context: '',
+  }))
+}
+
 // ─── Projects tab ──────────────────────────────────────────────────────────────
 
 function ProjectsTab({ search }: { search: string }) {
-  const items = MOCK_PROJECTS.filter(
-    p =>
-      !search ||
-      p.name.toLowerCase().includes(search.toLowerCase()) ||
-      p.owner.toLowerCase().includes(search.toLowerCase()),
-  )
+  const { data: searchData, isLoading } = useQuery<ApiSearchResult>({
+    queryKey: ['memory', 'search', 'projects', search],
+    queryFn: async () => {
+      if (!search.trim()) return { projects: [], decisions: [] }
+      const res = await fetch(`/api/memory/search?q=${encodeURIComponent(search)}`)
+      if (!res.ok) throw new Error('unavailable')
+      return res.json()
+    },
+    enabled: !!search.trim(),
+    retry: false,
+    staleTime: 30_000,
+  })
+
+  if (isLoading) {
+    return (
+      <div className="rounded-xl border bg-card px-4 py-5">
+        <p className="text-xs text-muted-foreground">Your office is retrieving this information.</p>
+      </div>
+    )
+  }
+
+  // If we have live search results, show them; otherwise filter mock data
+  const items = (search.trim() && searchData?.projects?.length)
+    ? normaliseProjects(searchData.projects)
+    : MOCK_PROJECTS.filter(
+        p =>
+          !search ||
+          p.name.toLowerCase().includes(search.toLowerCase()) ||
+          p.owner.toLowerCase().includes(search.toLowerCase()),
+      )
 
   if (!items.length)
     return <EmptyState label="No projects match that search." />
@@ -362,12 +539,35 @@ function ProjectCard({ project: p }: { project: MemoryProject }) {
 // ─── Decisions tab ─────────────────────────────────────────────────────────────
 
 function DecisionsTab({ search }: { search: string }) {
-  const items = MOCK_DECISIONS.filter(
-    d =>
-      !search ||
-      d.title.toLowerCase().includes(search.toLowerCase()) ||
-      d.madeBy.toLowerCase().includes(search.toLowerCase()),
-  )
+  const { data: searchData, isLoading } = useQuery<ApiSearchResult>({
+    queryKey: ['memory', 'search', 'decisions', search],
+    queryFn: async () => {
+      if (!search.trim()) return { projects: [], decisions: [] }
+      const res = await fetch(`/api/memory/search?q=${encodeURIComponent(search)}`)
+      if (!res.ok) throw new Error('unavailable')
+      return res.json()
+    },
+    enabled: !!search.trim(),
+    retry: false,
+    staleTime: 30_000,
+  })
+
+  if (isLoading) {
+    return (
+      <div className="rounded-xl border bg-card px-4 py-5">
+        <p className="text-xs text-muted-foreground">Your office is retrieving this information.</p>
+      </div>
+    )
+  }
+
+  const items = (search.trim() && searchData?.decisions?.length)
+    ? normaliseDecisions(searchData.decisions)
+    : MOCK_DECISIONS.filter(
+        d =>
+          !search ||
+          d.title.toLowerCase().includes(search.toLowerCase()) ||
+          d.madeBy.toLowerCase().includes(search.toLowerCase()),
+      )
 
   if (!items.length)
     return <EmptyState label="No decisions match that search." />
