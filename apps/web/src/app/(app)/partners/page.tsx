@@ -6,6 +6,8 @@ import { PartnerActivityFeed } from '@/components/partners/PartnerActivityFeed'
 import { ApprovalCard } from '@/components/partners/ApprovalCard'
 import { AttentionItem } from '@/components/partners/AttentionItem'
 import { CheckCircle2 } from 'lucide-react'
+import { useApprovalItems, useTaskStats } from '@/hooks/use-partners-data'
+import type { Partner } from '@/data/partners'
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
@@ -38,10 +40,51 @@ function SectionLabelWithCount({ children, count, accent }: {
   )
 }
 
+/**
+ * Merge live task stats into the Follow-up Partner card so counts are real.
+ * All other partners keep their static mock data — EOS language is preserved.
+ */
+function applyTaskStats(
+  partners: Partner[],
+  stats: { overdue: number; commitments: number; waiting_for: number } | undefined
+): Partner[] {
+  if (!stats) return partners
+  return partners.map(p => {
+    if (p.id !== 'followup') return p
+    const overdue = stats.overdue
+    const commitments = stats.commitments
+    const waitingFor = stats.waiting_for
+    return {
+      ...p,
+      stats: [
+        { label: 'Commitments open', value: String(commitments) },
+        { label: 'Overdue', value: String(overdue) },
+        { label: 'Waiting on others', value: String(waitingFor) },
+      ],
+      needsAttention:
+        overdue > 0
+          ? `${overdue} commitment${overdue > 1 ? 's are' : ' is'} overdue`
+          : undefined,
+      workState: overdue > 0 ? 'working' : commitments > 0 ? 'working' : 'completed',
+    }
+  })
+}
+
 export default function PartnersPage() {
-  const waitingPartners  = PARTNERS.filter(p => p.workState === 'waiting').length
+  const { data: liveApprovals, isError: approvalsError } = useApprovalItems()
+  const { data: taskStats } = useTaskStats()
+
+  // Use live approvals when available and non-empty; fall back to mock data
+  const approvalItems =
+    !approvalsError && liveApprovals && liveApprovals.length > 0
+      ? liveApprovals
+      : APPROVAL_ITEMS
+
+  const partners = applyTaskStats(PARTNERS, taskStats)
+
+  const waitingPartners  = partners.filter(p => p.workState === 'waiting').length
   const attentionCount   = ATTENTION_ITEMS.length
-  const approvalCount    = APPROVAL_ITEMS.length
+  const approvalCount    = approvalItems.length
 
   return (
     <div className="animate-fade-in max-w-2xl space-y-10 pb-16">
@@ -55,7 +98,7 @@ export default function PartnersPage() {
           Your review
         </SectionLabelWithCount>
         <div className="space-y-2">
-          {APPROVAL_ITEMS.map(item => (
+          {approvalItems.map(item => (
             <ApprovalCard key={item.id} item={item} />
           ))}
         </div>
@@ -85,7 +128,7 @@ export default function PartnersPage() {
           Your partners
         </SectionLabelWithCount>
         <div className="space-y-2">
-          {PARTNERS.map(partner => (
+          {partners.map(partner => (
             <PartnerCard key={partner.id} partner={partner} />
           ))}
         </div>
