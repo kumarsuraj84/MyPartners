@@ -157,9 +157,9 @@ Return exactly this JSON structure:
           sentiment: parsed.sentiment as string,
           aiProcessed: true,
           metadata: {
-            whyItMatters: parsed.whyItMatters,
-            entities: parsed.entities ?? [],
-          },
+            whyItMatters: parsed.whyItMatters as string | null,
+            entities: (parsed.entities ?? []) as unknown[],
+          } as Record<string, unknown>,
         },
       })
 
@@ -228,7 +228,7 @@ Return exactly this JSON structure:
         data: {
           status: 'completed',
           completedAt: new Date(),
-          output: parsed,
+          output: parsed as Record<string, unknown>,
           metadata: { stage: 'complete', stageTimes },
         },
       })

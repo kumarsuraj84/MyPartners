@@ -122,7 +122,7 @@ Be conservative with priority — most messages are normal.`,
         messageCategory: parsed.messageCategory as string,
         sentiment: parsed.sentiment as string,
         aiProcessed: true,
-        metadata: { whyItMatters: parsed.whyItMatters },
+        metadata: { whyItMatters: parsed.whyItMatters as string | null },
       },
       include: WITH_SUGGESTIONS,
     })

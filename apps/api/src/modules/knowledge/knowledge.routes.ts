@@ -31,7 +31,7 @@ export const knowledgeRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post('/', async (req, reply) => {
     const { userId } = req.user as { userId: string }
     const data = CreateNoteSchema.parse(req.body)
-    const note = await prisma.knowledgeNote.create({ data: { ...data, userId } })
+    const note = await prisma.knowledgeNote.create({ data: { ...data, userId, metadata: data.metadata as Record<string, unknown> | undefined } })
     reply.code(201)
     return note
   })
@@ -40,7 +40,7 @@ export const knowledgeRoutes: FastifyPluginAsync = async (fastify) => {
     const { userId } = req.user as { userId: string }
     const { id } = req.params as { id: string }
     const data = CreateNoteSchema.partial().parse(req.body)
-    return prisma.knowledgeNote.update({ where: { id, userId }, data })
+    return prisma.knowledgeNote.update({ where: { id, userId }, data: { ...data, metadata: data.metadata as Record<string, unknown> | undefined } })
   })
 
   fastify.delete('/:id', async (req, reply) => {

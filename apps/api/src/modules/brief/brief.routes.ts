@@ -86,7 +86,6 @@ export const briefRoutes: FastifyPluginAsync = async (fastify) => {
     const senderContext = senderAddresses.length > 0
       ? await prisma.person.findMany({
           where: { tenantId, email: { in: senderAddresses } },
-          include: { organization: { select: { name: true } } },
           select: {
             name: true, email: true, role: true, company: true,
             organization: { select: { name: true } },
@@ -253,8 +252,8 @@ Return JSON with exactly these keys:
 
     return prisma.executiveBrief.upsert({
       where: { userId_date: { userId, date: today } },
-      create: { userId, date: today, content },
-      update: { content },
+      create: { userId, date: today, content: content as Record<string, unknown> },
+      update: { content: content as Record<string, unknown> },
     })
   }
 }
