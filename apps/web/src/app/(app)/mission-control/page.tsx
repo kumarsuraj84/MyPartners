@@ -27,6 +27,30 @@ function groupByPartner(events: OfficeEvent[]): Record<string, OfficeEvent[]> {
   }, {})
 }
 
+// ─── API job shape (matches Prisma AIJob) ────────────────────────────────────
+
+type ApiJob = {
+  id: string
+  type: string
+  status: string
+  createdAt: string
+  completedAt?: string | null
+  startedAt?: string | null
+  error?: string | null
+  input?: unknown
+  output?: unknown
+  metadata?: unknown
+}
+
+// ─── Map job type to human-readable description ───────────────────────────────
+
+function jobDescription(job: ApiJob): string {
+  const typeMap: Record<string, string> = {
+    email_processing: 'Reviewed and organised an incoming message',
+  }
+  return typeMap[job.type] ?? 'Office activity completed'
+}
+
 // ─── Activity Log Row ─────────────────────────────────────────────────────────
 
 type ActivityJob = {
@@ -114,7 +138,7 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function ExecutiveOfficePage() {
-  const { data: jobsData, isError } = useQuery<{ jobs: ActivityJob[] }>({
+  const { data: apiJobs, isError: jobsError } = useQuery<ApiJob[]>({
     queryKey: ['office-activity'],
     queryFn: async () => {
       const res = await fetch('/api/ai/jobs')
@@ -123,6 +147,17 @@ export default function ExecutiveOfficePage() {
     },
     retry: false,
   })
+
+  // Map API jobs to the ActivityJob shape used by ActivityRow
+  const mappedJobs: ActivityJob[] = (apiJobs ?? []).map(j => ({
+    id: j.id,
+    status: j.status,
+    description: jobDescription(j),
+    created_at: j.createdAt,
+    output: j.output ? JSON.stringify(j.output, null, 2) : undefined,
+  }))
+
+  const hasLiveData = !jobsError && apiJobs !== undefined && apiJobs.length > 0
 
   const partnerGroups = groupByPartner(MOCK_OFFICE_EVENTS)
   const partnerOrder = Array.from(
@@ -156,31 +191,52 @@ export default function ExecutiveOfficePage() {
 
       {/* ── 2. What was prepared ── */}
       <div>
-        <SectionHeader title="What was prepared" count={MOCK_OFFICE_EVENTS.length} />
-        <div className="rounded-xl border bg-card overflow-hidden divide-y divide-border/50">
-          {partnerOrder.map(partner => {
-            const events = partnerGroups[partner]
-            return (
-              <div key={partner} className="px-4 py-3.5">
-                <p className="text-[11px] font-semibold text-muted-foreground/60 uppercase tracking-wider mb-2.5">
-                  {partner}
-                </p>
-                <div className="space-y-3">
-                  {events.map(ev => (
-                    <TimelineEvent
-                      key={ev.id}
-                      time={ev.time}
-                      actor={ev.partnerName}
-                      action={ev.action}
-                      details={ev.details}
-                      type={ev.type}
-                    />
-                  ))}
-                </div>
-              </div>
-            )
-          })}
+        <div className="flex items-center justify-between mb-2.5">
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] font-semibold text-muted-foreground/70 uppercase tracking-wider">
+              What was prepared
+            </span>
+            <span className="inline-flex items-center justify-center h-4 min-w-[1rem] px-1.5 rounded-full bg-primary/10 text-primary text-[10px] font-semibold tabular-nums">
+              {hasLiveData ? mappedJobs.length : MOCK_OFFICE_EVENTS.length}
+            </span>
+            {hasLiveData && (
+              <span className="flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-200/60">
+                <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                Live
+              </span>
+            )}
+          </div>
         </div>
+        {hasLiveData ? (
+          <div className="rounded-xl border bg-card overflow-hidden">
+            {mappedJobs.map(job => <ActivityRow key={job.id} job={job} />)}
+          </div>
+        ) : (
+          <div className="rounded-xl border bg-card overflow-hidden divide-y divide-border/50">
+            {partnerOrder.map(partner => {
+              const events = partnerGroups[partner]
+              return (
+                <div key={partner} className="px-4 py-3.5">
+                  <p className="text-[11px] font-semibold text-muted-foreground/60 uppercase tracking-wider mb-2.5">
+                    {partner}
+                  </p>
+                  <div className="space-y-3">
+                    {events.map(ev => (
+                      <TimelineEvent
+                        key={ev.id}
+                        time={ev.time}
+                        actor={ev.partnerName}
+                        action={ev.action}
+                        details={ev.details}
+                        type={ev.type}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
       </div>
 
       {/* ── 3. Memory updates ── */}
@@ -223,7 +279,7 @@ export default function ExecutiveOfficePage() {
       {/* ── 5. Detailed activity (Office Activity Log) ── */}
       <div>
         <SectionHeader title="Office Activity Log" />
-        {isError || !jobsData ? (
+        {jobsError || !apiJobs ? (
           <div className="rounded-xl border bg-card px-4 py-4">
             <p className="text-xs text-muted-foreground leading-relaxed">
               Office activity log is not available right now.
@@ -231,12 +287,12 @@ export default function ExecutiveOfficePage() {
           </div>
         ) : (
           <div className="rounded-xl border bg-card overflow-hidden">
-            {jobsData.jobs.length === 0 ? (
+            {mappedJobs.length === 0 ? (
               <div className="px-4 py-4">
                 <p className="text-xs text-muted-foreground">No activity recorded yet today.</p>
               </div>
             ) : (
-              jobsData.jobs.map(job => <ActivityRow key={job.id} job={job} />)
+              mappedJobs.map(job => <ActivityRow key={job.id} job={job} />)
             )}
           </div>
         )}
