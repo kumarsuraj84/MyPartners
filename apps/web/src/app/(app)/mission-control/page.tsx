@@ -27,30 +27,6 @@ function groupByPartner(events: OfficeEvent[]): Record<string, OfficeEvent[]> {
   }, {})
 }
 
-// ─── API job shape (matches Prisma AIJob) ────────────────────────────────────
-
-type ApiJob = {
-  id: string
-  type: string
-  status: string
-  createdAt: string
-  completedAt?: string | null
-  startedAt?: string | null
-  error?: string | null
-  input?: unknown
-  output?: unknown
-  metadata?: unknown
-}
-
-// ─── Map job type to human-readable description ───────────────────────────────
-
-function jobDescription(job: ApiJob): string {
-  const typeMap: Record<string, string> = {
-    email_processing: 'Reviewed and organised an incoming message',
-  }
-  return typeMap[job.type] ?? 'Office activity completed'
-}
-
 // ─── Activity Log Row ─────────────────────────────────────────────────────────
 
 type ActivityJob = {
@@ -58,7 +34,8 @@ type ActivityJob = {
   status: string
   description?: string
   created_at?: string
-  output?: string
+  createdAt?: string
+  output?: string | Record<string, unknown>
 }
 
 function ActivityRow({ job }: { job: ActivityJob }) {
@@ -81,6 +58,15 @@ function ActivityRow({ job }: { job: ActivityJob }) {
   const label = statusLabel[job.status] ?? job.status
   const color = statusColor[job.status] ?? 'bg-muted text-muted-foreground border-border'
 
+  const outputStr =
+    job.output == null
+      ? undefined
+      : typeof job.output === 'string'
+        ? job.output
+        : JSON.stringify(job.output, null, 2)
+
+  const timestamp = job.createdAt ?? job.created_at
+
   return (
     <div className="border-b border-border/50 last:border-0">
       <div className="flex items-start gap-3 px-4 py-3">
@@ -96,13 +82,13 @@ function ActivityRow({ job }: { job: ActivityJob }) {
           <p className="text-xs text-foreground/80 leading-relaxed">
             {job.description ?? 'Office activity'}
           </p>
-          {job.created_at && (
+          {timestamp && (
             <p className="text-[11px] text-muted-foreground/50 mt-0.5 tabular-nums">
-              {new Date(job.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              {new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
             </p>
           )}
         </div>
-        {job.output && (
+        {outputStr && (
           <button
             type="button"
             onClick={() => setOpen(v => !v)}
@@ -114,10 +100,10 @@ function ActivityRow({ job }: { job: ActivityJob }) {
           </button>
         )}
       </div>
-      {open && job.output && (
+      {open && outputStr && (
         <div className="px-4 pb-3">
           <pre className="text-[11px] text-muted-foreground leading-relaxed whitespace-pre-wrap font-mono bg-muted/40 rounded-lg px-3 py-2.5 overflow-x-auto">
-            {job.output}
+            {outputStr}
           </pre>
         </div>
       )}
@@ -135,10 +121,37 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   )
 }
 
+// ─── Relative time helper ─────────────────────────────────────────────────────
+
+function relativeTime(ms: number): string {
+  const diff = Date.now() - ms
+  const minutes = Math.floor(diff / 60_000)
+  if (minutes < 1) return 'just now'
+  if (minutes === 1) return '1 minute ago'
+  if (minutes < 60) return `${minutes} minutes ago`
+  const hours = Math.floor(minutes / 60)
+  if (hours === 1) return '1 hour ago'
+  return `${hours} hours ago`
+}
+
+// ─── Live indicator ───────────────────────────────────────────────────────────
+
+function LiveIndicator() {
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <span className="relative flex h-2 w-2">
+        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+        <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+      </span>
+      <span className="text-[11px] font-medium text-emerald-600">Live</span>
+    </span>
+  )
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function ExecutiveOfficePage() {
-  const { data: apiJobs, isError: jobsError } = useQuery<ApiJob[]>({
+  const { data: rawJobsData, isError, dataUpdatedAt } = useQuery<ActivityJob[] | { jobs: ActivityJob[] }>({
     queryKey: ['office-activity'],
     queryFn: async () => {
       const res = await fetch('/api/ai/jobs')
@@ -146,18 +159,18 @@ export default function ExecutiveOfficePage() {
       return res.json()
     },
     retry: false,
+    refetchInterval: 30_000,
+    refetchIntervalInBackground: false,
   })
 
-  // Map API jobs to the ActivityJob shape used by ActivityRow
-  const mappedJobs: ActivityJob[] = (apiJobs ?? []).map(j => ({
-    id: j.id,
-    status: j.status,
-    description: jobDescription(j),
-    created_at: j.createdAt,
-    output: j.output ? JSON.stringify(j.output, null, 2) : undefined,
-  }))
+  // Handle both response shapes: direct array or { jobs: [] }
+  const apiJobs: ActivityJob[] | null = rawJobsData == null
+    ? null
+    : Array.isArray(rawJobsData)
+      ? rawJobsData
+      : rawJobsData.jobs ?? null
 
-  const hasLiveData = !jobsError && apiJobs !== undefined && apiJobs.length > 0
+  const hasLiveJobs = !isError && apiJobs != null && apiJobs.length > 0
 
   const partnerGroups = groupByPartner(MOCK_OFFICE_EVENTS)
   const partnerOrder = Array.from(
@@ -170,9 +183,16 @@ export default function ExecutiveOfficePage() {
       {/* ── Header ── */}
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Executive Office</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">
-          Everything your office prepared today.
-        </p>
+        <div className="flex items-center gap-3 mt-0.5 flex-wrap">
+          <p className="text-sm text-muted-foreground">
+            Everything your office prepared today.
+          </p>
+          {dataUpdatedAt > 0 && (
+            <span className="text-[11px] text-muted-foreground/50 tabular-nums">
+              Updated {relativeTime(dataUpdatedAt)}
+            </span>
+          )}
+        </div>
       </div>
 
       {/* ── 1. What happened today ── */}
@@ -191,25 +211,16 @@ export default function ExecutiveOfficePage() {
 
       {/* ── 2. What was prepared ── */}
       <div>
-        <div className="flex items-center justify-between mb-2.5">
-          <div className="flex items-center gap-2">
-            <span className="text-[11px] font-semibold text-muted-foreground/70 uppercase tracking-wider">
-              What was prepared
-            </span>
-            <span className="inline-flex items-center justify-center h-4 min-w-[1rem] px-1.5 rounded-full bg-primary/10 text-primary text-[10px] font-semibold tabular-nums">
-              {hasLiveData ? mappedJobs.length : MOCK_OFFICE_EVENTS.length}
-            </span>
-            {hasLiveData && (
-              <span className="flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-200/60">
-                <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                Live
-              </span>
-            )}
-          </div>
+        <div className="flex items-center gap-2 mb-3">
+          <SectionHeader
+            title="What was prepared"
+            count={hasLiveJobs ? apiJobs.length : MOCK_OFFICE_EVENTS.length}
+          />
+          {hasLiveJobs && <LiveIndicator />}
         </div>
-        {hasLiveData ? (
+        {hasLiveJobs ? (
           <div className="rounded-xl border bg-card overflow-hidden">
-            {mappedJobs.map(job => <ActivityRow key={job.id} job={job} />)}
+            {apiJobs.map(job => <ActivityRow key={job.id} job={job} />)}
           </div>
         ) : (
           <div className="rounded-xl border bg-card overflow-hidden divide-y divide-border/50">
@@ -279,7 +290,7 @@ export default function ExecutiveOfficePage() {
       {/* ── 5. Detailed activity (Office Activity Log) ── */}
       <div>
         <SectionHeader title="Office Activity Log" />
-        {jobsError || !apiJobs ? (
+        {isError || apiJobs == null ? (
           <div className="rounded-xl border bg-card px-4 py-4">
             <p className="text-xs text-muted-foreground leading-relaxed">
               Office activity log is not available right now.
@@ -287,12 +298,12 @@ export default function ExecutiveOfficePage() {
           </div>
         ) : (
           <div className="rounded-xl border bg-card overflow-hidden">
-            {mappedJobs.length === 0 ? (
+            {apiJobs.length === 0 ? (
               <div className="px-4 py-4">
                 <p className="text-xs text-muted-foreground">No activity recorded yet today.</p>
               </div>
             ) : (
-              mappedJobs.map(job => <ActivityRow key={job.id} job={job} />)
+              apiJobs.map(job => <ActivityRow key={job.id} job={job} />)
             )}
           </div>
         )}
