@@ -178,7 +178,7 @@ function ReasoningOutput({ output }: { output: Record<string, unknown> }) {
 
   return (
     <div className="mt-3 pt-3 border-t border-border/50 space-y-2.5 text-xs">
-      {fields.map(f => output[f.key] && (
+      {(fields as { label: string; key: string }[]).map(f => output[f.key] != null && (
         <div key={f.key} className="flex gap-2">
           <span className="text-muted-foreground/60 w-16 flex-shrink-0">{f.label}</span>
           <span className="text-foreground/70">{String(output[f.key])}</span>

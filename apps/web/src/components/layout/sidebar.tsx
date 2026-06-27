@@ -3,17 +3,17 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import {
-  LayoutDashboard, Inbox, CheckSquare, BookOpen, Settings, Zap, LogOut
+  LayoutDashboard, BookOpen, Settings, Zap, LogOut, Users, Building2
 } from 'lucide-react'
+
 import { useAuth } from '@/hooks/use-auth'
 
 const NAV = [
-  { label: 'Home',            href: '/',                icon: LayoutDashboard },
-  { label: 'Mission Control', href: '/mission-control', icon: Zap },
-  { label: 'Communication',   href: '/inbox',           icon: Inbox },
-  { label: 'Work',            href: '/tasks',           icon: CheckSquare },
-  { label: 'Memory',          href: '/knowledge',       icon: BookOpen },
-  { label: 'Settings',        href: '/settings',        icon: Settings },
+  { label: 'My Desk',  href: '/',                icon: LayoutDashboard },
+  { label: 'Partners', href: '/partners',         icon: Users },
+  { label: 'Office',   href: '/mission-control',  icon: Building2 },
+  { label: 'Memory',   href: '/knowledge',        icon: BookOpen },
+  { label: 'Settings', href: '/settings',         icon: Settings },
 ]
 
 export function Sidebar() {
