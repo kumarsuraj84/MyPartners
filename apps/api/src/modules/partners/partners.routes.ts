@@ -40,20 +40,20 @@ function extractPartnerName(job: { type: string; metadata: unknown }): string {
   if (meta && typeof meta['partner'] === 'string') return meta['partner']
   // Derive from job type as fallback
   const typeMap: Record<string, string> = {
-    email_processing: 'Email Assistant',
-    brief_generation: 'Brief Assistant',
-    task_creation: 'Task Assistant',
+    email_processing: 'Communication Partner',
+    brief_generation: 'Chief of Staff',
+    task_creation: 'Follow-up Partner',
   }
-  return typeMap[job.type] ?? 'AI Assistant'
+  return typeMap[job.type] ?? 'Chief of Staff'
 }
 
 function jobToAction(type: string): string {
   const map: Record<string, string> = {
-    email_processing: 'Processed emails',
-    brief_generation: 'Generated executive brief',
-    task_creation: 'Created tasks from messages',
+    email_processing: 'Reviewed and organised inbox',
+    brief_generation: 'Prepared executive brief',
+    task_creation: 'Organised follow-ups from messages',
   }
-  return map[type] ?? 'Ran AI job'
+  return map[type] ?? 'Reviewed and prepared'
 }
 
 function jobDetails(job: { type: string; output: unknown; error: string | null }): string {

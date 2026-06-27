@@ -42,7 +42,7 @@ function signalToDecision(signal: {
     businessImpact: signal.businessImpact,
     confidenceLevel: null as string | null,
     confidenceNote: null as string | null,
-    preparedBy: 'system',
+    preparedBy: 'Chief of Staff',
     preparedAt: signal.createdAt.toISOString(),
     estimatedTime: null as string | null,
     context: null as string | null,
