@@ -17,16 +17,23 @@ export interface AIProvider {
 }
 
 class GroqProvider implements AIProvider {
-  private client: Groq
+  private client: Groq | null = null
   private model: string
 
   constructor() {
-    this.client = new Groq({ apiKey: process.env.GROQ_API_KEY })
     this.model = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile'
   }
 
+  private getClient(): Groq {
+    if (!this.client) {
+      if (!process.env.GROQ_API_KEY) throw new Error('GROQ_API_KEY is not set')
+      this.client = new Groq({ apiKey: process.env.GROQ_API_KEY })
+    }
+    return this.client
+  }
+
   async complete(options: AICompletionOptions): Promise<string> {
-    const response = await this.client.chat.completions.create({
+    const response = await this.getClient().chat.completions.create({
       model: this.model,
       messages: options.messages,
       temperature: options.temperature ?? 0.3,
