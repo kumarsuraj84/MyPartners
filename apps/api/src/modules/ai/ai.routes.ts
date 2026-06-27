@@ -156,10 +156,11 @@ Return exactly this JSON structure:
           messageCategory: parsed.messageCategory as string,
           sentiment: parsed.sentiment as string,
           aiProcessed: true,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           metadata: {
             whyItMatters: parsed.whyItMatters as string | null,
             entities: (parsed.entities ?? []) as unknown[],
-          } as Record<string, unknown>,
+          } as unknown as any,
         },
       })
 
@@ -228,7 +229,8 @@ Return exactly this JSON structure:
         data: {
           status: 'completed',
           completedAt: new Date(),
-          output: parsed as Record<string, unknown>,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          output: parsed as unknown as any,
           metadata: { stage: 'complete', stageTimes },
         },
       })

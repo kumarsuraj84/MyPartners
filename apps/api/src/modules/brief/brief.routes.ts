@@ -252,8 +252,10 @@ Return JSON with exactly these keys:
 
     return prisma.executiveBrief.upsert({
       where: { userId_date: { userId, date: today } },
-      create: { userId, date: today, content: content as Record<string, unknown> },
-      update: { content: content as Record<string, unknown> },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      create: { userId, date: today, content: content as unknown as any },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      update: { content: content as unknown as any },
     })
   }
 }
