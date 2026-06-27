@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify'
+import { randomBytes } from 'node:crypto'
 import { prisma } from '../../lib/prisma.js'
 import { getConnector, listConnectors } from '../../lib/connector.js'
 import { audit } from '../../lib/audit.js'
@@ -25,7 +26,18 @@ export const integrationsRoutes: FastifyPluginAsync = async (fastify) => {
     if (!connector) return reply.code(404).send({ error: 'Unknown provider' })
 
     try {
-      const url = await connector.getAuthUrl(userId)
+      // Generate a CSRF nonce and embed it in the OAuth state param
+      const nonce = randomBytes(16).toString('hex')
+      const state = JSON.stringify({ userId, nonce })
+      const url = await connector.getAuthUrl(userId, state)
+      // Store nonce in a signed, httpOnly, sameSite:strict cookie for CSRF verification on callback
+      reply.setCookie(`oauth_nonce_${req.params.provider}`, nonce, {
+        httpOnly: true,
+        sameSite: 'strict',
+        signed: true,
+        path: '/',
+        maxAge: 600, // 10 minutes — enough time to complete OAuth flow
+      })
       reply.redirect(url)
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Connection failed'
@@ -39,7 +51,25 @@ export const integrationsRoutes: FastifyPluginAsync = async (fastify) => {
       const connector = getConnector(req.params.provider)
       if (!connector) return reply.code(404).send({ error: 'Unknown provider' })
 
-      const { code, state: userId } = req.query
+      const { code, state: rawState } = req.query
+
+      // Verify CSRF nonce: cookie nonce must match nonce embedded in state param
+      let userId: string
+      try {
+        const { userId: uid, nonce: stateNonce } = JSON.parse(rawState) as { userId: string; nonce: string }
+        const cookieNonce = req.unsignCookie(
+          req.cookies[`oauth_nonce_${req.params.provider}`] ?? '',
+        )
+        if (!cookieNonce.valid || cookieNonce.value !== stateNonce) {
+          return reply.code(400).send({ error: 'Invalid OAuth state' })
+        }
+        // Clear the nonce cookie after successful verification
+        reply.clearCookie(`oauth_nonce_${req.params.provider}`, { path: '/' })
+        userId = uid
+      } catch {
+        return reply.code(400).send({ error: 'Invalid OAuth state' })
+      }
+
       await connector.handleCallback(code, userId)
 
       await audit({
@@ -107,7 +137,16 @@ export const integrationsRoutes: FastifyPluginAsync = async (fastify) => {
     const connector = getConnector('gmail')
     if (!connector) return reply.code(400).send({ error: 'Gmail integration not configured' })
     try {
-      reply.redirect(await connector.getAuthUrl(userId))
+      const nonce = randomBytes(16).toString('hex')
+      const state = JSON.stringify({ userId, nonce })
+      reply.setCookie('oauth_nonce_gmail', nonce, {
+        httpOnly: true,
+        sameSite: 'strict',
+        signed: true,
+        path: '/',
+        maxAge: 600,
+      })
+      reply.redirect(await connector.getAuthUrl(userId, state))
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Gmail connection failed'
       reply.code(400).send({ error: msg })
@@ -115,7 +154,22 @@ export const integrationsRoutes: FastifyPluginAsync = async (fastify) => {
   })
 
   fastify.get('/gmail/callback', async (req, reply) => {
-    const { code, state: userId } = req.query as { code: string; state: string }
+    const { code, state: rawState } = req.query as { code: string; state: string }
+
+    // Verify CSRF nonce
+    let userId: string
+    try {
+      const { userId: uid, nonce: stateNonce } = JSON.parse(rawState) as { userId: string; nonce: string }
+      const cookieNonce = req.unsignCookie(req.cookies['oauth_nonce_gmail'] ?? '')
+      if (!cookieNonce.valid || cookieNonce.value !== stateNonce) {
+        return reply.code(400).send({ error: 'Invalid OAuth state' })
+      }
+      reply.clearCookie('oauth_nonce_gmail', { path: '/' })
+      userId = uid
+    } catch {
+      return reply.code(400).send({ error: 'Invalid OAuth state' })
+    }
+
     const connector = getConnector('gmail')!
     await connector.handleCallback(code, userId)
     await audit({ tenantId: userId, userId, action: 'connected', entity: 'integration', entityId: 'gmail' })

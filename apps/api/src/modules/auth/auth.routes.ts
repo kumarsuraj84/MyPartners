@@ -12,6 +12,10 @@ const LoginSchema = z.object({
 export const authRoutes: FastifyPluginAsync = async (fastify) => {
   // Dev-mode login (no password for v1 — production replaces this with OAuth)
   fastify.post<{ Body: z.infer<typeof LoginSchema> }>('/login', async (req, reply) => {
+    if (process.env.NODE_ENV === 'production') {
+      return reply.code(404).send({ error: 'Not found' })
+    }
+
     const { email, name } = LoginSchema.parse(req.body)
 
     let user = await prisma.user.findUnique({ where: { email } })

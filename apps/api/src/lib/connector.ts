@@ -24,8 +24,10 @@ export interface Connector {
   readonly displayName: string
   readonly scopes: string[]
 
-  /** Returns the OAuth/redirect URL to start the auth flow. */
-  getAuthUrl(userId: string): Promise<string>
+  /** Returns the OAuth/redirect URL to start the auth flow.
+   * @param state - Optional pre-built state string (e.g. JSON with userId + CSRF nonce).
+   *   When omitted the connector falls back to using userId as the state. */
+  getAuthUrl(userId: string, state?: string): Promise<string>
 
   /** Exchanges an auth code/callback payload for tokens and persists the Integration row. */
   handleCallback(code: string, userId: string): Promise<ConnectorConfig>
