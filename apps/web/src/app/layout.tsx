@@ -4,7 +4,7 @@ import { Providers } from '@/components/providers'
 
 export const metadata: Metadata = {
   title: 'MyPartners — Executive Operating Assistant',
-  description: 'Your AI-powered executive operating system',
+  description: 'Your executive operating system — briefed, organized, and ready.',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
