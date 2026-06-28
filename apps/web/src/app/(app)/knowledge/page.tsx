@@ -699,34 +699,32 @@ function NotesTab({ search }: { search: string }) {
 const MOCK_PATTERNS: ExecutivePattern[] = [
   {
     id: 'pat-1',
-    title: 'Morning decision-making',
-    description: 'You make most strategic decisions before 11am. Your acceptance rate for afternoon meeting requests is 40% lower.',
-    frequency: 'Observed across 3 months',
-    category: 'Scheduling',
+    pattern: 'Morning decision-making',
+    detail: 'You make most strategic decisions before 11am. Your acceptance rate for afternoon meeting requests is 40% lower.',
+    value: 'Observed across 3 months',
+    trend: 'positive',
   },
   {
     id: 'pat-2',
-    title: 'Weekly investor touchpoints',
-    description: 'You proactively reach out to investors every 7-10 days, typically on Tuesdays and Thursdays.',
-    frequency: 'Consistent pattern',
-    category: 'Relationships',
+    pattern: 'Weekly investor touchpoints',
+    detail: 'You proactively reach out to investors every 7-10 days, typically on Tuesdays and Thursdays.',
+    value: 'Consistent pattern',
+    trend: 'positive',
   },
 ]
 
 const MOCK_INSIGHTS: PreferenceInsight[] = [
   {
     id: 'ins-1',
-    title: 'Brief over detailed',
+    insight: 'Brief over detailed',
     detail: 'You open and act on emails under 100 words 3x more often than longer messages. Summaries perform best.',
-    learnedFrom: 'Email behaviour',
-    confidence: 'high',
+    category: 'Email behaviour',
   },
   {
     id: 'ins-2',
-    title: 'Prefer async over sync for updates',
+    insight: 'Prefer async over sync for updates',
     detail: 'Status updates via written notes get faster responses than meeting requests for the same topic.',
-    learnedFrom: 'Calendar and message patterns',
-    confidence: 'medium',
+    category: 'Calendar and message patterns',
   },
 ]
 
@@ -734,21 +732,32 @@ const MOCK_RELATIONSHIPS: RelationshipIntelligence[] = [
   {
     id: 'rel-1',
     name: 'Marcus Chen',
+    email: null,
     role: 'Lead Investor',
     company: 'Apex Ventures',
-    status: 'declining',
-    signal: 'No contact in 18 days. Last interaction was shorter than usual and he did not respond to the follow-up.',
-    lastContact: '18 days ago',
-    suggestedAction: 'Send a brief update on Q3 milestones',
+    messageCount30d: 2,
+    messageCountTotal: 14,
+    urgentCount: 1,
+    recentTopics: ['Q3 milestones', 'follow-up'],
+    daysLastContact: 18,
+    trend: 'declining',
+    openTasks: 1,
+    healthScore: 45,
   },
   {
     id: 'rel-2',
     name: 'Priya Nair',
+    email: null,
     role: 'VP Partnerships',
     company: 'CloudScale',
-    status: 'active',
-    signal: 'Engaged consistently. Replied within 2 hours on last 4 interactions.',
-    lastContact: '3 days ago',
+    messageCount30d: 8,
+    messageCountTotal: 32,
+    urgentCount: 0,
+    recentTopics: ['partnership update', 'Q3 review'],
+    daysLastContact: 3,
+    trend: 'active',
+    openTasks: 0,
+    healthScore: 88,
   },
 ]
 
@@ -785,7 +794,7 @@ function IntelligenceTab() {
   const insights = (prefsData?.insights ?? MOCK_INSIGHTS).slice(0, 4)
   const allRelationships = relationshipsData?.relationships ?? MOCK_RELATIONSHIPS
   const relationships = allRelationships
-    .filter((r: RelationshipIntelligence) => r.status === 'active' || r.status === 'declining')
+    .filter((r: RelationshipIntelligence) => r.trend === 'active' || r.trend === 'declining')
     .slice(0, 6)
 
   return (
@@ -815,7 +824,7 @@ function IntelligenceTab() {
         <SectionLabel>Relationship health</SectionLabel>
         <div className="space-y-2">
           {relationships.map((r: RelationshipIntelligence) => (
-            <RelationshipIntelligenceCard key={r.id} relationship={r} />
+            <RelationshipIntelligenceCard key={r.id} person={r} />
           ))}
         </div>
       </div>

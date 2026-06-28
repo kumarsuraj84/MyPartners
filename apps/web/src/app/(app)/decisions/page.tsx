@@ -81,6 +81,11 @@ export default function DecisionsPage() {
               status: status as DecisionOutcome['status'],
               hoursToDecide: 0,
               category: decision.category,
+              escalation: decision.escalation ?? 'important',
+              decidedAt: new Date().toISOString(),
+              createdAt: new Date().toISOString(),
+              recommendation: decision.recommendation ?? '',
+              preparedBy: decision.preparedBy ?? 'System',
             })
           }
         }
