@@ -5,3 +5,6 @@ export type { IntelRecommendationItem } from './IntelRecommendationCard'
 
 export { RelationshipContextCard } from './RelationshipContextCard'
 export type { PersonContext } from './RelationshipContextCard'
+
+export { MeetingBriefCard } from './MeetingBriefCard'
+export type { MeetingBriefAttendee, RecentMessage, MeetingBrief } from './MeetingBriefCard'
