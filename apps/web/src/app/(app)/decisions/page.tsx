@@ -3,7 +3,13 @@ import { useState, useEffect } from 'react'
 import { DECISIONS, countByCategory, countByEscalation } from '@/data/decisions'
 import type { Decision, DecisionCategory } from '@/data/decisions'
 import { DecisionInbox } from '@/components/decisions/DecisionInbox'
+import type { CardState } from '@/components/decisions/DecisionCard'
 import { api } from '@/lib/api'
+
+interface ResolvedDecision {
+  id: string
+  status: 'approved' | 'changes_requested' | 'deferred'
+}
 
 const CATEGORY_STYLES: Record<DecisionCategory, string> = {
   Strategic:   'bg-blue-50 text-blue-700 border-blue-200',
@@ -22,14 +28,25 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 }
 
 export default function DecisionsPage() {
-  const [decisions, setDecisions]   = useState<Decision[]>([])
-  const [loading, setLoading]       = useState(true)
-  const [refreshedAt, setRefreshedAt] = useState<string | null>(null)
+  const [decisions, setDecisions]       = useState<Decision[]>([])
+  const [resolvedIds, setResolvedIds]   = useState<Map<string, CardState>>(new Map())
+  const [loading, setLoading]           = useState(true)
+  const [refreshedAt, setRefreshedAt]   = useState<string | null>(null)
 
   useEffect(() => {
-    api.get<Decision[]>('/api/decisions')
-      .then(data => {
-        setDecisions(data && data.length > 0 ? data : DECISIONS)
+    const pendingFetch = api.get<Decision[]>('/api/decisions')
+    const resolvedFetch = api.get<ResolvedDecision[]>(
+      '/api/decisions?status=approved,deferred,changes_requested'
+    ).catch(() => [] as ResolvedDecision[])
+
+    Promise.all([pendingFetch, resolvedFetch])
+      .then(([pending, resolved]) => {
+        setDecisions(pending && pending.length > 0 ? pending : DECISIONS)
+        const map = new Map<string, CardState>()
+        for (const r of resolved ?? []) {
+          map.set(r.id, r.status)
+        }
+        setResolvedIds(map)
         setRefreshedAt('just now')
       })
       .catch(() => {
@@ -111,7 +128,7 @@ export default function DecisionsPage() {
       {/* Inbox */}
       <div>
         <SectionLabel>Pending decisions</SectionLabel>
-        <DecisionInbox decisions={decisions} />
+        <DecisionInbox decisions={decisions} resolvedIds={resolvedIds} />
       </div>
 
     </div>

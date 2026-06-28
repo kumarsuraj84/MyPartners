@@ -64,7 +64,7 @@ function Toast({ visible }: { visible: boolean }) {
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-type CardState = 'pending' | 'approved' | 'changes_requested' | 'deferred'
+export type CardState = 'pending' | 'approved' | 'changes_requested' | 'deferred'
 type ApiAction = 'approve' | 'defer' | 'request-changes'
 
 const STORAGE_KEY = 'eos:decision-states'
@@ -95,10 +95,11 @@ function saveStoredState(id: string, state: CardState) {
 
 interface DecisionCardProps {
   decision: Decision
+  initialState?: CardState
 }
 
-export function DecisionCard({ decision: d }: DecisionCardProps) {
-  const [state, setState]       = useState<CardState>(() => loadStoredState(d.id))
+export function DecisionCard({ decision: d, initialState }: DecisionCardProps) {
+  const [state, setState]       = useState<CardState>(() => initialState ?? loadStoredState(d.id))
   const [expanded, setExpanded] = useState(false)
   const [toastVisible, setToastVisible] = useState(false)
 

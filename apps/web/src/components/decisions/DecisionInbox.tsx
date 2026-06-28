@@ -2,6 +2,7 @@
 import { useState } from 'react'
 import { cn } from '@/lib/utils'
 import { DecisionCard } from './DecisionCard'
+import type { CardState } from './DecisionCard'
 import { filterDecisions, countByFilter, countByEscalation } from '@/data/decisions'
 import type { Decision, DecisionFilter } from '@/data/decisions'
 import { CheckCircle2 } from 'lucide-react'
@@ -15,9 +16,10 @@ const FILTER_LABELS: Record<DecisionFilter, string> = {
 
 interface DecisionInboxProps {
   decisions: Decision[]
+  resolvedIds?: Map<string, CardState>
 }
 
-export function DecisionInbox({ decisions }: DecisionInboxProps) {
+export function DecisionInbox({ decisions, resolvedIds }: DecisionInboxProps) {
   const [activeFilter, setActiveFilter] = useState<DecisionFilter>('all')
 
   const counts         = countByFilter(decisions)
@@ -103,7 +105,7 @@ export function DecisionInbox({ decisions }: DecisionInboxProps) {
       ) : (
         <div className="space-y-2.5">
           {filtered.map(d => (
-            <DecisionCard key={d.id} decision={d} />
+            <DecisionCard key={d.id} decision={d} initialState={resolvedIds?.get(d.id)} />
           ))}
         </div>
       )}
