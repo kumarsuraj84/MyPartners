@@ -89,16 +89,12 @@ export class GmailConnector implements Connector {
 
     // Fetch up to 50 messages from the last 7 days
     const afterEpoch = Math.floor((Date.now() - 7 * 24 * 60 * 60 * 1000) / 1000)
-    let listRes: Awaited<ReturnType<typeof gmail.users.messages.list>>
-    try {
-      listRes = await gmail.users.messages.list({
-        userId: 'me',
-        maxResults: 50,
-        q: `after:${afterEpoch} in:inbox`,
-      })
-    } catch {
-      return { processed: 0, errors: 1 }
-    }
+    const listRes = await gmail.users.messages.list({
+      userId: 'me',
+      maxResults: 50,
+      q: `after:${afterEpoch} in:inbox`,
+    }).catch(() => null)
+    if (!listRes) return { processed: 0, errors: 1 }
 
     const messageIds = listRes.data.messages ?? []
     let processed = 0
