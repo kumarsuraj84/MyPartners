@@ -14,6 +14,7 @@ import { MorningBriefPreview } from '@/components/day/MorningBriefPreview'
 import { MeetingsToday } from '@/components/day/MeetingsToday'
 import { CommitmentsToday } from '@/components/day/CommitmentsToday'
 import { PartnerActivityFeed } from '@/components/partners/PartnerActivityFeed'
+import { WaitingForCard, type WaitingForItem } from '@/components/intelligence/WaitingForCard'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -90,6 +91,35 @@ export default function HomePage() {
     queryFn: () => api.get<ApiTask[]>('/api/tasks?category=waiting_for&status=pending'),
     retry: false,
   })
+
+  const { data: waitingForApiItems } = useQuery<ApiTask[]>({
+    queryKey: ['waiting-for'],
+    queryFn: () => api.get<ApiTask[]>('/api/waiting-for'),
+    retry: false,
+  })
+
+  // Derive WaitingForItem list: prefer /api/waiting-for, fall back to mock owed-to-you
+  const waitingItems: WaitingForItem[] = waitingForApiItems
+    ? waitingForApiItems.map((t: ApiTask) => ({
+        id: t.id,
+        title: t.title,
+        owner: t.waitingFrom ?? t.assigneeName ?? 'Unknown',
+        dueDate: t.dueDate ?? '',
+        daysUntilDue: 0,
+        isOverdue: false,
+        context: t.description ?? '',
+      }))
+    : MOCK_COMMITMENTS
+        .filter(c => c.category === 'owed-to-you')
+        .map(c => ({
+          id: c.id,
+          title: c.title,
+          owner: c.owner,
+          dueDate: c.dueDate,
+          daysUntilDue: c.daysUntilDue,
+          isOverdue: c.isOverdue,
+          context: c.context,
+        }))
 
   // Merge live task queries into Commitment[]; fall back to mock on total failure
   const hasLiveData = commitmentTasks !== undefined || waitingForTasks !== undefined
@@ -243,6 +273,30 @@ export default function HomePage() {
       <section>
         <Label>Commitments</Label>
         <CommitmentsToday commitments={commitments} />
+      </section>
+
+      {/* ── Waiting for others ────────────────────────────────────────────── */}
+      <section>
+        <Label>Waiting for others</Label>
+        {waitingItems.length === 0 ? (
+          <div className="px-4 py-3.5 rounded-xl border border-border bg-card/50">
+            <p className="text-sm text-muted-foreground/60 italic">Nothing outstanding — your team is on track.</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {waitingItems.slice(0, 4).map(item => (
+              <WaitingForCard
+                key={item.id}
+                item={item}
+                onNudge={(id) => { /* fire api.post(`/api/tasks/${id}/nudge`) */ }}
+                onMark={(id) => { api.patch(`/api/tasks/${id}`, { status: 'completed' }).catch(() => {}) }}
+              />
+            ))}
+            {waitingItems.length > 4 && (
+              <p className="text-[11px] text-muted-foreground pl-1">+{waitingItems.length - 4} more</p>
+            )}
+          </div>
+        )}
       </section>
 
       {/* ── Office activity ───────────────────────────────────────────────── */}
