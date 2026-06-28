@@ -7,6 +7,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Mail, MessageSquare, Check, Zap, Bell, Clock, Shield, Users, ToggleLeft } from 'lucide-react'
+import { ActionPolicyCard } from '@/components/actions/ActionPolicyCard'
+import { AutomationPreferenceCard } from '@/components/actions/AutomationPreferenceCard'
 
 interface Integration {
   id: string; provider: string; isActive: boolean; createdAt: string
@@ -128,6 +130,22 @@ export default function SettingsPage() {
     },
     [saveConfig],
   )
+
+  const { data: actionPolicies = {} } = useQuery<Record<string, string>>({
+    queryKey: ['action-policies'],
+    queryFn: async () => {
+      try { return await api.get('/api/actions/policies') } catch { return {} }
+    },
+  })
+
+  const savePolicies = useMutation({
+    mutationFn: (body: Record<string, string>) => api.post('/api/actions/policies', body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['action-policies'] }),
+  })
+
+  const handlePolicyChange = useCallback((key: string, mode: string) => {
+    savePolicies.mutate({ [key]: mode })
+  }, [savePolicies])
 
   const cfg = configData ?? CONFIG_DEFAULTS
   const gmailIntegration = integrations.find(i => i.provider === 'gmail')
@@ -372,6 +390,67 @@ export default function SettingsPage() {
             />
           </CardContent>
         </Card>
+      </section>
+
+      {/* Automation Preferences */}
+      <section>
+        <SectionLabel>Automation preferences</SectionLabel>
+        <p className="text-xs text-muted-foreground -mt-2 mb-3">Choose what your Office handles automatically while you focus on decisions.</p>
+        <div className="space-y-3">
+          <AutomationPreferenceCard
+            title="Archive newsletters automatically"
+            description="Newsletters are moved to archive without asking you"
+            enabled={(actionPolicies['archive_newsletter'] ?? 'confirm_once') === 'always'}
+            onToggle={() => handlePolicyChange('archive_newsletter', actionPolicies['archive_newsletter'] === 'always' ? 'confirm_once' : 'always')}
+            saving={savePolicies.isPending}
+          />
+          <AutomationPreferenceCard
+            title="Mark informational messages as done"
+            description="FYI messages with no action required are cleared automatically"
+            enabled={(actionPolicies['mark_informational_done'] ?? 'confirm_once') === 'always'}
+            onToggle={() => handlePolicyChange('mark_informational_done', actionPolicies['mark_informational_done'] === 'always' ? 'confirm_once' : 'always')}
+            saving={savePolicies.isPending}
+          />
+          <AutomationPreferenceCard
+            title="Prepare meeting briefs"
+            description="Briefing notes are prepared before each meeting without prompting"
+            enabled={(actionPolicies['prepare_meeting_brief'] ?? 'always') === 'always'}
+            onToggle={() => handlePolicyChange('prepare_meeting_brief', actionPolicies['prepare_meeting_brief'] === 'always' ? 'confirm_once' : 'always')}
+            saving={savePolicies.isPending}
+          />
+        </div>
+      </section>
+
+      {/* Action Policies */}
+      <section>
+        <SectionLabel>Action approvals</SectionLabel>
+        <p className="text-xs text-muted-foreground -mt-2 mb-3">Control how much approval each type of action needs before it's taken.</p>
+        <div className="space-y-3">
+          <ActionPolicyCard
+            actionKey="send_followup_reminder"
+            label="Send follow-up reminders"
+            description="Chase overdue waiting-for items on your behalf"
+            mode={(actionPolicies['send_followup_reminder'] as never) ?? 'manual'}
+            onChange={handlePolicyChange}
+            saving={savePolicies.isPending}
+          />
+          <ActionPolicyCard
+            actionKey="archive_newsletter"
+            label="Archive newsletters"
+            description="Move newsletters to archive"
+            mode={(actionPolicies['archive_newsletter'] as never) ?? 'confirm_once'}
+            onChange={handlePolicyChange}
+            saving={savePolicies.isPending}
+          />
+          <ActionPolicyCard
+            actionKey="send_approved_email"
+            label="Send approved emails"
+            description="Send replies and follow-ups you've drafted and approved"
+            mode={(actionPolicies['send_approved_email'] as never) ?? 'manual'}
+            onChange={handlePolicyChange}
+            saving={savePolicies.isPending}
+          />
+        </div>
       </section>
 
       {/* Feature flags */}

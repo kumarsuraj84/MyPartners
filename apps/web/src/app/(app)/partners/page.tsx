@@ -8,6 +8,7 @@ import { PartnerCard } from '@/components/partners/PartnerCard'
 import { PartnerActivityFeed } from '@/components/partners/PartnerActivityFeed'
 import { ApprovalCard } from '@/components/partners/ApprovalCard'
 import { AttentionItem } from '@/components/partners/AttentionItem'
+import { ActionExecutionTimeline } from '@/components/actions/ActionExecutionTimeline'
 import { CheckCircle2 } from 'lucide-react'
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
@@ -39,6 +40,19 @@ function SectionLabelWithCount({ children, count, accent }: {
       )}
     </div>
   )
+}
+
+// ── Action history ─────────────────────────────────────────────────────────
+
+interface ActionHistoryItem {
+  id: string
+  actionType: string
+  label: string
+  status: string
+  createdAt: string
+  completedAt?: string
+  reversible: boolean
+  reversed: boolean
 }
 
 // ── Partner state API ─────────────────────────────────────────────────────────
@@ -196,6 +210,13 @@ export default function PartnersPage() {
     retry: false,
   })
 
+  const { data: actionHistory = [], refetch: refetchHistory } = useQuery<ActionHistoryItem[]>({
+    queryKey: ['action-history'],
+    queryFn: async () => {
+      try { return await api.get<ActionHistoryItem[]>('/api/actions/history') } catch { return [] }
+    },
+  })
+
   const approvalItems: ApprovalItem[] = approvalData
     ? approvalData.map(toApprovalItem)
     : APPROVAL_ITEMS
@@ -281,6 +302,15 @@ export default function PartnersPage() {
       <section>
         <SectionLabel>Recent office activity</SectionLabel>
         <PartnerActivityFeed />
+      </section>
+
+      {/* ACTION HISTORY ──────────────────────────────────────────── */}
+      <section>
+        <SectionLabel>Taken care of by your Office</SectionLabel>
+        <ActionExecutionTimeline
+          items={actionHistory}
+          onReversed={() => refetchHistory()}
+        />
       </section>
 
     </div>

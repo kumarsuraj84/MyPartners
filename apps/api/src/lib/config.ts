@@ -50,6 +50,13 @@ export const CONFIG_DEFAULTS: Record<string, Record<string, unknown>> = {
     advancedAnalytics: false,
     customConnectors: false,
   },
+  action_policies: {
+    send_followup_reminder: 'manual',
+    archive_newsletter: 'confirm_once',
+    mark_informational_done: 'confirm_once',
+    prepare_meeting_brief: 'always',
+    send_approved_email: 'manual',
+  },
 }
 
 /** Returns a single config value, falling back to the hardcoded default. */

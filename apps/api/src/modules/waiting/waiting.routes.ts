@@ -21,14 +21,20 @@ export const waitingRoutes: FastifyPluginAsync = async (fastify) => {
 
     const results = await Promise.all(
       tasks.map(async (task) => {
-        let person = null
+        let personId: string | null = null
+        let personRole: string | null = null
+        let personCompany: string | null = null
         if (task.waitingFrom) {
-          person = await prisma.person.findFirst({
+          const person = await prisma.person.findFirst({
             where: {
               tenantId: userId,
               name: { contains: task.waitingFrom, mode: 'insensitive' },
             },
+            select: { id: true, role: true, company: true },
           })
+          personId = person?.id ?? null
+          personRole = person?.role ?? null
+          personCompany = person?.company ?? null
         }
 
         return {
@@ -40,9 +46,9 @@ export const waitingRoutes: FastifyPluginAsync = async (fastify) => {
           isOverdue: task.dueDate ? task.dueDate < now : false,
           priority: task.priority,
           context: task.description ?? null,
-          personId: person?.id ?? null,
-          personRole: person?.role ?? null,
-          personCompany: person?.company ?? null,
+          personId,
+          personRole,
+          personCompany,
         }
       }),
     )
