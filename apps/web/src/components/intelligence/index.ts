@@ -8,3 +8,6 @@ export type { PersonContext } from './RelationshipContextCard'
 
 export { MeetingBriefCard } from './MeetingBriefCard'
 export type { MeetingBriefAttendee, RecentMessage, MeetingBrief } from './MeetingBriefCard'
+
+export { DecisionOutcomeCard } from './DecisionOutcomeCard'
+export type { DecisionOutcome, DecisionOutcomeCardProps } from './DecisionOutcomeCard'
