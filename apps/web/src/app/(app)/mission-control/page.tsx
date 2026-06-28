@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import React, { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { cn } from '@/lib/utils'
 import { SectionHeader } from '@/components/ui/section-header'
@@ -91,7 +91,7 @@ function ActivityRow({ job }: { job: ActivityJob }) {
         {outputStr && (
           <button
             type="button"
-            onClick={() => setOpen(v => !v)}
+            onClick={() => setOpen((v: boolean) => !v)}
             className="flex items-center gap-0.5 text-[11px] text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
             aria-expanded={open}
           >
