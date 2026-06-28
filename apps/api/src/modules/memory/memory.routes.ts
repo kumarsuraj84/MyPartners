@@ -64,13 +64,13 @@ export const memoryRoutes: FastifyPluginAsync = async (fastify) => {
         },
         include: {
           organization: { select: { id: true, name: true } },
-          _count: { select: { decisions: true } },
+          _count: { select: { businessDecisions: true } },
         },
         take: 5,
         orderBy: { updatedAt: 'desc' },
       }),
 
-      prisma.decision.findMany({
+      prisma.businessDecision.findMany({
         where: {
           tenantId,
           OR: [
@@ -200,7 +200,7 @@ export const memoryRoutes: FastifyPluginAsync = async (fastify) => {
         person:       { include: { organization: true } },
         organization: true,
         project:      { include: { organization: true } },
-        decision:     { include: { project: true } },
+        businessDecision: { include: { project: true } },
       },
       orderBy: [{ confidence: 'desc' }, { createdAt: 'asc' }],
     })

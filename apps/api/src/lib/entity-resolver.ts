@@ -67,7 +67,7 @@ export async function resolveEntities(input: ResolverInput): Promise<void> {
   // Decisions from memory items — these are point-in-time records, always create
   for (const item of input.memoryItems) {
     if (item.type === 'decision') {
-      const decision = await prisma.decision.create({
+      const businessDecision = await prisma.businessDecision.create({
         data: {
           tenantId,
           title: item.title,
@@ -76,7 +76,7 @@ export async function resolveEntities(input: ResolverInput): Promise<void> {
           createdBy: input.userId,
         },
       })
-      await linkToMessage(tenantId, input.messageId, 'decision', { decisionId: decision.id }, 0.9, item.title)
+      await linkToMessage(tenantId, input.messageId, 'decision', { businessDecisionId: businessDecision.id }, 0.9, item.title)
     }
   }
 }
@@ -168,7 +168,7 @@ async function linkToMessage(
   tenantId: string,
   messageId: string,
   entityType: string,
-  ids: { personId?: string; organizationId?: string; projectId?: string; decisionId?: string },
+  ids: { personId?: string; organizationId?: string; projectId?: string; businessDecisionId?: string },
   confidence: number,
   extractedText?: string,
 ) {
@@ -180,7 +180,7 @@ async function linkToMessage(
       ...(ids.personId ? { personId: ids.personId } : {}),
       ...(ids.organizationId ? { organizationId: ids.organizationId } : {}),
       ...(ids.projectId ? { projectId: ids.projectId } : {}),
-      ...(ids.decisionId ? { decisionId: ids.decisionId } : {}),
+      ...(ids.businessDecisionId ? { businessDecisionId: ids.businessDecisionId } : {}),
     },
   })
   if (existing) return

@@ -94,7 +94,7 @@ export const briefRoutes: FastifyPluginAsync = async (fastify) => {
       : []
 
     // Recent decisions from Business Memory
-    const recentDecisions = await prisma.decision.findMany({
+    const recentDecisions = await prisma.businessDecision.findMany({
       where: { tenantId },
       take: briefConfig.recentDecisionsLimit ?? 5,
       orderBy: { madeAt: 'desc' },

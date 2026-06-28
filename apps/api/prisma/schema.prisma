@@ -82,6 +82,7 @@ model User {
   notes            KnowledgeNote[]
   aiJobs           AIJob[]
   suggestedActions SuggestedAction[]
+  decisions        Decision[]
 
   @@map("users")
 }
@@ -149,14 +150,14 @@ model Project {
 
   organizationId  String?
   organization    Organization? @relation(fields: [organizationId], references: [id])
-  decisions       Decision[]
+  businessDecisions BusinessDecision[]
   messageEntities MessageEntity[]
 
   @@index([tenantId])
   @@map("projects")
 }
 
-model Decision {
+model BusinessDecision {
   id          String   @id @default(cuid())
   tenantId    String
   title       String
@@ -177,6 +178,38 @@ model Decision {
   @@map("decisions")
 }
 
+// EOS Executive Decision — tracks decisions presented to the executive for approval/deferral
+model Decision {
+  id              String   @id @default(cuid())
+  userId          String
+  sourceSignalId  String?
+  title           String
+  category        String   @default("Strategic")
+  escalation      String   @default("important")  // critical | urgent | important
+  priority        String   @default("waiting")     // urgent | today | waiting
+  recommendation  String
+  whyItMatters    String
+  businessImpact  String
+  businessImpactSummary String
+  actionIfDelayed String?
+  suggestedDeadline String?
+  confidenceLevel String   @default("medium")     // high | medium | low
+  confidenceNote  String?
+  preparedBy      String   @default("Chief of Staff")
+  estimatedTime   String   @default("5 min")
+  context         Json     @default("[]")
+  relatedDecisions Json    @default("[]")
+  status          String   @default("pending")    // pending | approved | changes_requested | deferred
+  statusNote      String?
+  decidedAt       DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status])
+  @@map("eos_decisions")
+}
+
 // Junction table: links a message to every domain object extracted from it.
 // Exactly one of personId/organizationId/projectId/decisionId is non-null per row.
 model MessageEntity {
@@ -188,23 +221,23 @@ model MessageEntity {
   extractedText  String?  // the text snippet that triggered this extraction
   createdAt      DateTime @default(now())
 
-  personId       String?
-  organizationId String?
-  projectId      String?
-  decisionId     String?
+  personId         String?
+  organizationId   String?
+  projectId        String?
+  businessDecisionId String?
 
-  message      Message       @relation(fields: [messageId], references: [id])
-  person       Person?       @relation(fields: [personId], references: [id])
-  organization Organization? @relation(fields: [organizationId], references: [id])
-  project      Project?      @relation(fields: [projectId], references: [id])
-  decision     Decision?     @relation(fields: [decisionId], references: [id])
+  message          Message            @relation(fields: [messageId], references: [id])
+  person           Person?            @relation(fields: [personId], references: [id])
+  organization     Organization?      @relation(fields: [organizationId], references: [id])
+  project          Project?           @relation(fields: [projectId], references: [id])
+  businessDecision BusinessDecision?  @relation(fields: [businessDecisionId], references: [id])
 
   @@index([tenantId])
   @@index([messageId])
   @@index([personId])
   @@index([organizationId])
   @@index([projectId])
-  @@index([decisionId])
+  @@index([businessDecisionId])
   @@map("message_entities")
 }
 
