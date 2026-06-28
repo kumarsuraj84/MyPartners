@@ -1,7 +1,7 @@
 'use client'
 import { useQuery } from '@tanstack/react-query'
 import { PARTNERS, APPROVAL_ITEMS, ATTENTION_ITEMS, ALL_ACTIVITIES } from '@/data/partners'
-import type { ApprovalItem, AttentionItemData, PartnerActivity, Partner } from '@/data/partners'
+import type { ApprovalItem, AttentionItemData, PartnerActivity, Partner, WorkState, PartnerStatus } from '@/data/partners'
 import { api } from '@/lib/api'
 import { ExecutiveOfficeHeader } from '@/components/partners/ExecutiveOfficeHeader'
 import { PartnerCard } from '@/components/partners/PartnerCard'
@@ -39,6 +39,39 @@ function SectionLabelWithCount({ children, count, accent }: {
       )}
     </div>
   )
+}
+
+// ── Partner state API ─────────────────────────────────────────────────────────
+
+interface ApiPartnerState {
+  workState?: WorkState
+  status?: PartnerStatus
+  focus?: string
+  needsAttention?: string
+  waitingForYou?: string
+  recentlyCompleted?: string[]
+}
+
+type ApiPartnersState = Record<string, ApiPartnerState>
+
+function applyPartnerState(
+  partners: Partner[],
+  state: ApiPartnersState | undefined,
+): Partner[] {
+  if (!state) return partners
+  return partners.map(p => {
+    const live = state[p.id]
+    if (!live) return p
+    return {
+      ...p,
+      ...(live.workState        !== undefined && { workState:         live.workState }),
+      ...(live.status           !== undefined && { status:            live.status }),
+      ...(live.focus            !== undefined && { focus:             live.focus }),
+      ...(live.needsAttention   !== undefined && { needsAttention:    live.needsAttention }),
+      ...(live.waitingForYou    !== undefined && { waitingForYou:     live.waitingForYou }),
+      ...(live.recentlyCompleted !== undefined && { recentlyCompleted: live.recentlyCompleted }),
+    }
+  })
 }
 
 // ── API response shapes ────────────────────────────────────────────────────────
@@ -157,6 +190,12 @@ export default function PartnersPage() {
     retry: false,
   })
 
+  const { data: partnersState } = useQuery<ApiPartnersState>({
+    queryKey: ['partners-state'],
+    queryFn: () => api.get<ApiPartnersState>('/api/partners/state'),
+    retry: false,
+  })
+
   const approvalItems: ApprovalItem[] = approvalData
     ? approvalData.map(toApprovalItem)
     : APPROVAL_ITEMS
@@ -175,8 +214,9 @@ export default function PartnersPage() {
       }))
     : ALL_ACTIVITIES
 
-  const partners = applyTaskStats(PARTNERS, taskStats)
+  const partners = applyPartnerState(applyTaskStats(PARTNERS, taskStats), partnersState)
 
+  const liveCount = partnersState ? Object.keys(partnersState).length : 0
   const waitingPartners = partners.filter(p => p.workState === 'waiting').length
   const approvalCount   = approvalItems.length
   const attentionCount  = attentionItems.length
@@ -219,9 +259,17 @@ export default function PartnersPage() {
 
       {/* YOUR PARTNERS ───────────────────────────────────────────── */}
       <section>
-        <SectionLabelWithCount count={waitingPartners}>
-          Your partners
-        </SectionLabelWithCount>
+        <div className="flex items-center justify-between">
+          <SectionLabelWithCount count={waitingPartners}>
+            Your partners
+          </SectionLabelWithCount>
+          {liveCount > 0 && (
+            <span className="text-[10px] font-medium text-muted-foreground/60 flex items-center gap-1 mb-2.5">
+              <span className="h-1.5 w-1.5 rounded-full bg-green-500 inline-block" />
+              live
+            </span>
+          )}
+        </div>
         <div className="space-y-2">
           {partners.map(partner => (
             <PartnerCard key={partner.id} partner={partner} />
