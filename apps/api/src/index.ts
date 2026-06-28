@@ -60,7 +60,7 @@ const app = Fastify({ logger: { level: process.env.LOG_LEVEL || (isProd ? 'info'
 await app.register(cors, {
   origin: process.env.FRONTEND_URL
     ? process.env.FRONTEND_URL.split(',').map(s => s.trim())
-    : (isProd ? false : ['http://localhost:3000', 'http://localhost:3002']),
+    : (isProd ? false : ['http://localhost:4000', 'http://localhost:4002']),
   credentials: true,
 })
 await app.register(jwt, { secret: process.env.JWT_SECRET || 'dev_secret_change_me' })
@@ -112,7 +112,7 @@ await app.register(meetingBriefRoutes, { prefix: '/api/meeting-brief' })
 await app.register(intelligenceModule, { prefix: '/api/intelligence' })
 
 // Start
-const port = parseInt(process.env.API_PORT || '3001')
+const port = parseInt(process.env.API_PORT || '4001')
 const host = process.env.API_HOST || '0.0.0.0'
 
 try {

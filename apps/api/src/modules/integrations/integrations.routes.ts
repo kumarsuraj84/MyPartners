@@ -81,7 +81,7 @@ export const integrationsRoutes: FastifyPluginAsync = async (fastify) => {
         after: { provider: req.params.provider },
       })
 
-      reply.redirect((process.env.FRONTEND_URL ?? 'http://localhost:3000') + `?${req.params.provider}=connected`)
+      reply.redirect((process.env.FRONTEND_URL ?? 'http://localhost:4000') + `?${req.params.provider}=connected`)
     },
   )
 
@@ -173,6 +173,6 @@ export const integrationsRoutes: FastifyPluginAsync = async (fastify) => {
     const connector = getConnector('gmail')!
     await connector.handleCallback(code, userId)
     await audit({ tenantId: userId, userId, action: 'connected', entity: 'integration', entityId: 'gmail' })
-    reply.redirect((process.env.FRONTEND_URL ?? 'http://localhost:3000') + '?gmail=connected')
+    reply.redirect((process.env.FRONTEND_URL ?? 'http://localhost:4000') + '?gmail=connected')
   })
 }

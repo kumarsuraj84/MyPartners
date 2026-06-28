@@ -131,7 +131,7 @@ export default function SettingsPage() {
 
   const cfg = configData ?? CONFIG_DEFAULTS
   const gmailIntegration = integrations.find(i => i.provider === 'gmail')
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4001'
 
   const digestOptions = [
     { value: 'daily', label: 'Daily' },
