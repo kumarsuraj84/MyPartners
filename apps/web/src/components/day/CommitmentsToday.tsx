@@ -1,8 +1,42 @@
 'use client'
 
+import { useQuery } from '@tanstack/react-query'
 import { Clock, AlertCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { MOCK_COMMITMENTS, type Commitment } from '@/data/mockCommitments'
+import { api } from '@/lib/api'
+
+interface ApiTask {
+  id: string
+  title: string
+  description?: string
+  status: string
+  priority: string
+  category: string
+  dueDate?: string
+  assigneeName?: string
+  waitingFrom?: string
+}
+
+function toCommitment(t: ApiTask): Commitment {
+  const now = new Date()
+  const due = t.dueDate ? new Date(t.dueDate) : null
+  const msPerDay = 86_400_000
+  const daysUntilDue = due ? Math.round((due.getTime() - now.getTime()) / msPerDay) : 0
+  const isOverdue = due ? due < now : false
+
+  return {
+    id: t.id,
+    title: t.title,
+    category: t.category === 'waiting_for' ? 'owed-to-you' : 'you-owe',
+    owner: t.assigneeName ?? t.waitingFrom ?? 'Team',
+    dueDate: due ? due.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : 'No date',
+    daysUntilDue,
+    isOverdue,
+    priority: (t.priority as Commitment['priority']) ?? 'medium',
+    context: t.description ?? '',
+  }
+}
 
 function CommitmentRow({ c }: { c: Commitment }) {
   return (
@@ -51,12 +85,10 @@ function CommitmentGroup({
   label,
   items,
   maxVisible,
-  totalCount,
 }: {
   label: string
   items: Commitment[]
   maxVisible: number
-  totalCount: number
 }) {
   if (items.length === 0) return null
   const visible = items.slice(0, maxVisible)
@@ -78,19 +110,25 @@ function CommitmentGroup({
 }
 
 export function CommitmentsToday() {
-  const all = MOCK_COMMITMENTS
+  const { data: apiTasks } = useQuery<ApiTask[]>({
+    queryKey: ['tasks-commitments'],
+    queryFn: () => api.get<ApiTask[]>('/api/tasks?category=commitment,waiting_for&status=pending,in_progress'),
+    retry: false,
+  })
+
+  const all: Commitment[] = apiTasks ? apiTasks.map(toCommitment) : MOCK_COMMITMENTS
+
   const youOwe = all.filter(c => c.category === 'you-owe')
   const owedToYou = all.filter(c => c.category === 'owed-to-you')
 
-  // Distribute the visible cap of 4 proportionally, prioritising "you owe"
   const MAX = 4
   const youOweMax = Math.min(youOwe.length, Math.ceil(MAX / 2))
   const owedMax = Math.min(owedToYou.length, MAX - youOweMax)
 
   return (
     <div className="space-y-4">
-      <CommitmentGroup label="You owe" items={youOwe} maxVisible={youOweMax} totalCount={youOwe.length} />
-      <CommitmentGroup label="Owed to you" items={owedToYou} maxVisible={owedMax} totalCount={owedToYou.length} />
+      <CommitmentGroup label="You owe" items={youOwe} maxVisible={youOweMax} />
+      <CommitmentGroup label="Owed to you" items={owedToYou} maxVisible={owedMax} />
     </div>
   )
 }

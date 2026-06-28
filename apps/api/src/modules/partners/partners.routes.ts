@@ -226,4 +226,37 @@ export const partnersRoutes: FastifyPluginAsync = async (fastify) => {
     reply.code(404)
     return { error: 'Item not found' }
   })
+
+  // GET /api/partners/stats — task stats for partner workState derivation
+  fastify.get('/stats', async (req) => {
+    const { userId } = req.user as { userId: string }
+    const now = new Date()
+
+    const [overdue, commitments, waitingFor] = await Promise.all([
+      prisma.task.count({
+        where: {
+          userId,
+          status: { in: ['pending', 'in_progress'] },
+          category: { in: ['task', 'commitment', 'follow_up'] },
+          dueDate: { lt: now },
+        },
+      }),
+      prisma.task.count({
+        where: {
+          userId,
+          status: { in: ['pending', 'in_progress'] },
+          category: 'commitment',
+        },
+      }),
+      prisma.task.count({
+        where: {
+          userId,
+          status: { in: ['pending', 'in_progress'] },
+          category: 'waiting_for',
+        },
+      }),
+    ])
+
+    return { overdue, commitments, waiting_for: waitingFor }
+  })
 }

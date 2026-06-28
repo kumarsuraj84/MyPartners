@@ -30,9 +30,15 @@ export const tasksRoutes: FastifyPluginAsync = async (fastify) => {
     const { status, priority, category } = req.query as Record<string, string>
 
     const where: Record<string, unknown> = { userId }
-    if (status) where.status = status
+    if (status) {
+      const statuses = status.split(',').map(s => s.trim()).filter(Boolean)
+      where.status = statuses.length === 1 ? statuses[0] : { in: statuses }
+    }
     if (priority) where.priority = priority
-    if (category) where.category = category
+    if (category) {
+      const categories = category.split(',').map(s => s.trim()).filter(Boolean)
+      where.category = categories.length === 1 ? categories[0] : { in: categories }
+    }
 
     return prisma.task.findMany({
       where,

@@ -67,12 +67,38 @@ function Toast({ visible }: { visible: boolean }) {
 type CardState = 'pending' | 'approved' | 'changes_requested' | 'deferred'
 type ApiAction = 'approve' | 'defer' | 'request-changes'
 
+const STORAGE_KEY = 'eos:decision-states'
+
+function loadStoredState(id: string): CardState {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    const map = raw ? (JSON.parse(raw) as Record<string, CardState>) : {}
+    return map[id] ?? 'pending'
+  } catch {
+    return 'pending'
+  }
+}
+
+function saveStoredState(id: string, state: CardState) {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    const map = raw ? (JSON.parse(raw) as Record<string, CardState>) : {}
+    map[id] = state
+    // Keep only last 200 decisions to avoid unbounded growth
+    const keys = Object.keys(map)
+    if (keys.length > 200) delete map[keys[0]]
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(map))
+  } catch {
+    // storage unavailable — no-op
+  }
+}
+
 interface DecisionCardProps {
   decision: Decision
 }
 
 export function DecisionCard({ decision: d }: DecisionCardProps) {
-  const [state, setState]       = useState<CardState>('pending')
+  const [state, setState]       = useState<CardState>(() => loadStoredState(d.id))
   const [expanded, setExpanded] = useState(false)
   const [toastVisible, setToastVisible] = useState(false)
 
@@ -83,6 +109,7 @@ export function DecisionCard({ decision: d }: DecisionCardProps) {
 
   const fireAndForget = useCallback((action: ApiAction, nextState: CardState) => {
     setState(nextState)
+    saveStoredState(d.id, nextState)
     showToast()
     api.post(`/api/decisions/${d.id}/${action}`).catch(() => {/* fire-and-forget */})
   }, [d.id, showToast])

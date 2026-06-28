@@ -60,19 +60,95 @@ export class GmailConnector implements Connector {
   }
 
   async sync(config: ConnectorConfig): Promise<{ processed: number; errors: number }> {
-    // Message sync is driven by the AI processing pipeline on demand.
-    // Scheduled background sync is a future capability gated behind calendarSync feature flag.
+    let activeConfig = config
 
-    // TODO: implement Gmail message fetch using googleapis.
-    // Example starting point:
-    //   const { google } = await import('googleapis')
-    //   const oauth2Client = new google.auth.OAuth2(...)
-    //   oauth2Client.setCredentials({ access_token: config.accessToken })
-    //   const gmail = google.gmail({ version: 'v1', auth: oauth2Client })
-    //   const res = await gmail.users.messages.list({ userId: 'me', maxResults: 50 })
-    //   // process res.data.messages and upsert into local DB
-    void config
-    return { processed: 0, errors: 0 }
+    // Refresh token if expired
+    if (activeConfig.expiresAt && activeConfig.expiresAt < new Date()) {
+      if (!activeConfig.refreshToken) return { processed: 0, errors: 1 }
+      try {
+        activeConfig = await this.refreshTokens(activeConfig)
+      } catch {
+        return { processed: 0, errors: 1 }
+      }
+    }
+
+    const { google } = await import('googleapis')
+    const oauth2Client = new google.auth.OAuth2(
+      process.env.GMAIL_CLIENT_ID,
+      process.env.GMAIL_CLIENT_SECRET,
+      process.env.GMAIL_REDIRECT_URI,
+    )
+    oauth2Client.setCredentials({ access_token: activeConfig.accessToken })
+    const gmail = google.gmail({ version: 'v1', auth: oauth2Client })
+
+    // Find the integration record for upserts
+    const integration = await prisma.integration.findUnique({
+      where: { userId_provider: { userId: config.userId, provider: this.provider } },
+    })
+    if (!integration) return { processed: 0, errors: 1 }
+
+    // Fetch up to 50 messages from the last 7 days
+    const afterEpoch = Math.floor((Date.now() - 7 * 24 * 60 * 60 * 1000) / 1000)
+    let listRes: Awaited<ReturnType<typeof gmail.users.messages.list>>
+    try {
+      listRes = await gmail.users.messages.list({
+        userId: 'me',
+        maxResults: 50,
+        q: `after:${afterEpoch} in:inbox`,
+      })
+    } catch {
+      return { processed: 0, errors: 1 }
+    }
+
+    const messageIds = listRes.data.messages ?? []
+    let processed = 0
+    let errors = 0
+
+    for (const { id: msgId } of messageIds) {
+      if (!msgId) continue
+      try {
+        const msgRes = await gmail.users.messages.get({
+          userId: 'me',
+          id: msgId,
+          format: 'metadata',
+          metadataHeaders: ['From', 'Subject', 'Date'],
+        })
+        const headers = msgRes.data.payload?.headers ?? []
+        const get = (name: string) => headers.find((h: { name?: string | null; value?: string | null }) => h.name?.toLowerCase() === name.toLowerCase())?.value ?? ''
+
+        const fromRaw = get('From')
+        const fromMatch = fromRaw.match(/^(.*?)\s*<(.+)>$/)
+        const fromName = fromMatch ? fromMatch[1].trim().replace(/^"|"$/g, '') : undefined
+        const fromAddress = fromMatch ? fromMatch[2] : fromRaw.trim()
+        const subject = get('Subject') || undefined
+        const dateStr = get('Date')
+        const receivedAt = dateStr ? new Date(dateStr) : new Date()
+        const snippet = msgRes.data.snippet ?? ''
+
+        await prisma.message.upsert({
+          where: { integrationId_externalId: { integrationId: integration.id, externalId: msgId } },
+          create: {
+            integrationId: integration.id,
+            userId: config.userId,
+            externalId: msgId,
+            provider: this.provider,
+            fromAddress,
+            fromName,
+            subject,
+            body: snippet,
+            summary: snippet.slice(0, 300),
+            receivedAt,
+            threadId: msgRes.data.threadId ?? undefined,
+          },
+          update: {},
+        })
+        processed++
+      } catch {
+        errors++
+      }
+    }
+
+    return { processed, errors }
   }
 
   /** Attempt to refresh an expired access token and persist the new tokens. */
