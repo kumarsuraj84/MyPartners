@@ -14,7 +14,9 @@ export const aiRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get('/activity', async (req) => {
     const { userId } = req.user as { userId: string }
 
-    const [jobs, needsAttention, totalUnread, activeFollowUps, activeCommitments, waitingFor, queueDepth] = await Promise.all([
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000)
+
+    const [jobs, needsAttention, totalUnread, activeFollowUps, activeCommitments, waitingFor, queueDepth, criticalSignals, recentNotes] = await Promise.all([
       prisma.aIJob.findMany({
         where: { userId },
         orderBy: { createdAt: 'desc' },
@@ -31,12 +33,49 @@ export const aiRoutes: FastifyPluginAsync = async (fastify) => {
       prisma.task.count({ where: { userId, category: 'commitment', status: { not: 'completed' } } }),
       prisma.task.count({ where: { userId, category: 'waiting_for', status: { not: 'completed' } } }),
       prisma.message.count({ where: { userId, aiProcessed: false, isArchived: false } }),
+      prisma.signal.findMany({
+        where: { userId, urgency: { in: ['critical', 'high'] }, isDismissed: false, isResolved: false },
+        orderBy: { createdAt: 'desc' },
+        take: 3,
+        select: { id: true, suggestedAction: true, urgency: true },
+      }),
+      prisma.knowledgeNote.findMany({
+        where: { userId, createdAt: { gte: since } },
+        orderBy: { createdAt: 'desc' },
+        take: 10,
+        select: { id: true, type: true, title: true, createdAt: true },
+      }),
     ])
 
     const recentJobs = jobs.slice(0, 20)
     const lastSuccess = recentJobs.find(j => j.status === 'completed')
     const errorCount = recentJobs.filter(j => j.status === 'failed').length
     const errorRate = recentJobs.length > 0 ? Math.round((errorCount / recentJobs.length) * 100) : 0
+    const completedCount = recentJobs.filter(j => j.status === 'completed').length
+
+    // Build whatHappened narrative
+    const whatHappened: string[] = [
+      `Your office reviewed ${totalUnread + completedCount} item${totalUnread + completedCount === 1 ? '' : 's'} since last night, handled ${completedCount} without any input needed from you, and surfaced ${needsAttention} that require${needsAttention === 1 ? 's' : ''} your decision or approval.`,
+      `${totalUnread} unread message${totalUnread === 1 ? ' has' : 's have'} been organised. ${activeFollowUps} follow-up${activeFollowUps === 1 ? ' is' : 's are'} being tracked.`,
+    ]
+    if (activeCommitments > 0) {
+      whatHappened.push(`${activeCommitments} active commitment${activeCommitments === 1 ? '' : 's'} and ${waitingFor} waiting-for item${waitingFor === 1 ? '' : 's'} remain open.`)
+    }
+
+    // Build recommendations from critical/high signals
+    const recommendations = criticalSignals.map(s => ({
+      id: s.id,
+      text: `Consider addressing: ${s.suggestedAction}`,
+      preparedBy: 'Chief of Staff',
+    }))
+
+    // Build memoryUpdates from recent KnowledgeNote records
+    const memoryUpdates = recentNotes.map(n => ({
+      entityType: n.type,
+      entityName: n.title,
+      change: 'added to memory',
+      time: n.createdAt.toISOString(),
+    }))
 
     return {
       jobs,
@@ -55,6 +94,9 @@ export const aiRoutes: FastifyPluginAsync = async (fastify) => {
         errorRate,
         groqConfigured: !!process.env.GROQ_API_KEY,
       },
+      whatHappened,
+      recommendations,
+      memoryUpdates,
     }
   })
 
