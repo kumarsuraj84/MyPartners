@@ -24,9 +24,12 @@ import { prisma } from './lib/prisma.js'
 // Commercial foundation: register connectors on startup
 import { registerConnector } from './lib/connector.js'
 import { gmailConnector } from './modules/integrations/gmail.connector.js'
+<<<<<<< HEAD
 import { googleCalendarConnector } from './modules/integrations/google-calendar.connector.js'
+import { whatsappConnector } from './modules/integrations/whatsapp.connector.js'
 registerConnector(gmailConnector)
 registerConnector(googleCalendarConnector)
+registerConnector(whatsappConnector)
 
 // ── Startup environment validation ───────────────────────────────────────────
 const isProd = process.env.NODE_ENV === 'production'
