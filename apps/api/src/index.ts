@@ -16,6 +16,7 @@ import { memoryRoutes } from './modules/memory/memory.routes.js'
 import { configRoutes } from './modules/config/config.routes.js'
 import { auditRoutes } from './modules/audit/audit.routes.js'
 import { signalsRoutes } from './modules/signals/signals.routes.js'
+import { recommendationsRoutes } from './modules/recommendations/recommendations.routes.js'
 import { adminRoutes } from './modules/admin/admin.routes.js'
 import { decisionsRoutes } from './modules/decisions/decisions.routes.js'
 import { partnersRoutes } from './modules/partners/partners.routes.js'
@@ -103,6 +104,7 @@ await app.register(adminRoutes, { prefix: '/api/admin' })
 await app.register(decisionsRoutes, { prefix: '/api/decisions' })
 await app.register(partnersRoutes, { prefix: '/api/partners' })
 await app.register(calendarRoutes, { prefix: '/api/calendar' })
+await app.register(recommendationsRoutes, { prefix: '/api/recommendations' })
 
 // Start
 const port = parseInt(process.env.API_PORT || '3001')
