@@ -11,6 +11,8 @@ import { MOCK_COMMITMENTS, type Commitment } from '@/data/mockCommitments'
 import { type ApiTask, toCommitment } from '@/components/day/CommitmentsToday'
 import { DecisionBanner } from '@/components/ui/decision-banner'
 import { MorningBriefPreview } from '@/components/day/MorningBriefPreview'
+import { MorningBriefCard } from '@/components/day/MorningBriefCard'
+import { IntelRecommendationCard, type IntelRecommendationItem } from '@/components/intelligence/IntelRecommendationCard'
 import { MeetingsToday } from '@/components/day/MeetingsToday'
 import { CommitmentsToday } from '@/components/day/CommitmentsToday'
 import { PartnerActivityFeed } from '@/components/partners/PartnerActivityFeed'
@@ -77,6 +79,12 @@ export default function HomePage() {
   const { data: signals = [] } = useQuery<Signal[]>({
     queryKey: ['signals'],
     queryFn: () => api.get('/api/signals'),
+    retry: false,
+  })
+
+  const { data: recommendations = [] } = useQuery<IntelRecommendationItem[]>({
+    queryKey: ['recommendations'],
+    queryFn: () => api.get('/api/recommendations'),
     retry: false,
   })
 
@@ -155,6 +163,20 @@ export default function HomePage() {
     ? { situationSummary: content.situationSummary, topPriority: content.topPriority }
     : { situationSummary: MOCK_BRIEF.situationSummary, topPriority: MOCK_BRIEF.topPriority }
 
+  // Brief card data with _meta
+  const briefCardData = briefLoading
+    ? undefined
+    : content
+    ? {
+        situationSummary: content.situationSummary,
+        topPriority: content.topPriority,
+        commitmentsSummary: content.commitmentsSummary,
+        followUpsSummary: content.followUpsSummary,
+        waitingForSummary: content.waitingForSummary,
+        _meta: content._meta,
+      }
+    : { situationSummary: MOCK_BRIEF.situationSummary, topPriority: MOCK_BRIEF.topPriority }
+
   // Attention items from live brief — empty when unavailable
   const requiresAttention = content?.requiresAttention ?? []
 
@@ -186,11 +208,7 @@ export default function HomePage() {
       )}
 
       {/* ── Situation + focus ─────────────────────────────────────────────── */}
-      {briefLoading ? (
-        <BriefSkeleton />
-      ) : (
-        <MorningBriefPreview brief={briefData} />
-      )}
+      <MorningBriefCard brief={briefCardData} isLoading={briefLoading} />
 
       {/* ── Needs attention today ─────────────────────────────────────────── */}
       {hasSignals && (
@@ -237,6 +255,27 @@ export default function HomePage() {
                 </div>
               </div>
             </div>
+          ))}
+        </section>
+      )}
+
+      {/* ── Prepared for you ─────────────────────────────────────────────── */}
+      {recommendations.length > 0 && (
+        <section className="space-y-2">
+          <Label>Prepared for you</Label>
+          {recommendations.slice(0, 3).map(rec => (
+            <IntelRecommendationCard
+              key={rec.id}
+              item={rec}
+              onAct={(id) => {
+                void api.post(`/api/signals/${id}/dismiss`)
+                void qc.invalidateQueries({ queryKey: ['recommendations'] })
+              }}
+              onDismiss={(id) => {
+                void api.post(`/api/signals/${id}/dismiss`)
+                void qc.invalidateQueries({ queryKey: ['recommendations'] })
+              }}
+            />
           ))}
         </section>
       )}
