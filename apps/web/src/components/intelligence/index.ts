@@ -14,3 +14,6 @@ export type { DecisionOutcome, DecisionOutcomeCardProps } from './DecisionOutcom
 
 export { PreferenceInsightCard, StatChip } from './PreferenceInsightCard'
 export type { PreferenceInsight, PreferenceInsightCardProps, StatChipProps } from './PreferenceInsightCard'
+
+export { RelationshipIntelligenceCard } from './RelationshipIntelligenceCard'
+export type { RelationshipIntelligence, RelationshipIntelligenceCardProps } from './RelationshipIntelligenceCard'
