@@ -17,3 +17,9 @@ export type { PreferenceInsight, PreferenceInsightCardProps, StatChipProps } fro
 
 export { RelationshipIntelligenceCard } from './RelationshipIntelligenceCard'
 export type { RelationshipIntelligence, RelationshipIntelligenceCardProps } from './RelationshipIntelligenceCard'
+
+export { MeetingIntelligenceCard } from './MeetingIntelligenceCard'
+export type { MeetingIntelligence, MeetingIntelligenceAttendee } from './MeetingIntelligenceCard'
+
+export { ExecutivePatternCard } from './ExecutivePatternCard'
+export type { ExecutivePattern } from './ExecutivePatternCard'
