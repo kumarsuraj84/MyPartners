@@ -23,14 +23,13 @@ import { partnersRoutes } from './modules/partners/partners.routes.js'
 import { calendarRoutes } from './modules/calendar/calendar.routes.js'
 import { waitingRoutes } from './modules/waiting/waiting.routes.js'
 import { meetingBriefRoutes } from './modules/calendar/meeting-brief.routes.js'
-import { intelligenceRoutes } from './modules/intelligence/intelligence.routes.js'
 import { prisma } from './lib/prisma.js'
 // Commercial foundation: register connectors on startup
 import { registerConnector } from './lib/connector.js'
 import { gmailConnector } from './modules/integrations/gmail.connector.js'
-<<<<<<< HEAD
 import { googleCalendarConnector } from './modules/integrations/google-calendar.connector.js'
 import { whatsappConnector } from './modules/integrations/whatsapp.connector.js'
+import { intelligenceModule } from './modules/intelligence/index.js'
 registerConnector(gmailConnector)
 registerConnector(googleCalendarConnector)
 registerConnector(whatsappConnector)
@@ -110,7 +109,7 @@ await app.register(calendarRoutes, { prefix: '/api/calendar' })
 await app.register(recommendationsRoutes, { prefix: '/api/recommendations' })
 await app.register(waitingRoutes, { prefix: '/api/waiting-for' })
 await app.register(meetingBriefRoutes, { prefix: '/api/meeting-brief' })
-await app.register(intelligenceRoutes, { prefix: '/api/intelligence' })
+await app.register(intelligenceModule, { prefix: '/api/intelligence' })
 
 // Start
 const port = parseInt(process.env.API_PORT || '3001')
