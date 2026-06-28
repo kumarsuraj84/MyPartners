@@ -1,9 +1,31 @@
 'use client'
 
 import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { MapPin, Users, ChevronDown, ChevronUp } from 'lucide-react'
-import { cn } from '@/lib/utils'
 import { MOCK_MEETINGS, type Meeting } from '@/data/mockMeetings'
+import { api } from '@/lib/api'
+
+interface ApiMeeting {
+  id: string
+  title: string
+  time: string
+  duration: string
+  attendees: string[] | string
+  location: string
+  context: string
+  hasBrief: boolean
+  preparedBy: string
+}
+
+function mapApiMeeting(m: ApiMeeting): Meeting {
+  return {
+    ...m,
+    attendees: Array.isArray(m.attendees)
+      ? m.attendees
+      : m.attendees.split(',').map(s => s.trim()),
+  }
+}
 
 function BriefChip({ hasBrief }: { hasBrief: boolean }) {
   if (hasBrief) {
@@ -75,9 +97,19 @@ function MeetingRow({ meeting }: { meeting: Meeting }) {
 }
 
 export function MeetingsToday() {
+  const { data } = useQuery<ApiMeeting[]>({
+    queryKey: ['calendar', 'today'],
+    queryFn: () => api.get<ApiMeeting[]>('/api/calendar/today'),
+    retry: false,
+  })
+
+  const meetings: Meeting[] = data && data.length > 0
+    ? data.map(mapApiMeeting)
+    : MOCK_MEETINGS
+
   return (
     <div className="space-y-2.5">
-      {MOCK_MEETINGS.map(m => (
+      {meetings.map(m => (
         <MeetingRow key={m.id} meeting={m} />
       ))}
     </div>
