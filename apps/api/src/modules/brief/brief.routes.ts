@@ -80,6 +80,10 @@ export const briefRoutes: FastifyPluginAsync = async (fastify) => {
       where: { userId, status: { not: 'completed' }, dueDate: { lt: new Date() } },
     })
 
+    const meetingsToday = await prisma.aIJob.count({
+      where: { userId, type: 'calendar_event', createdAt: { gte: today } },
+    })
+
     // Business Memory context: who are the senders of urgent messages?
     const tenantId = userId
     const senderAddresses = urgentMessages.map(m => m.fromAddress)
@@ -247,6 +251,7 @@ Return JSON with exactly these keys:
       overdueCount,
       suggestedActionsCount: suggestedActions,
       signalsCount: activeSignals.length,
+      meetingsToday,
       delta,
     }
 
