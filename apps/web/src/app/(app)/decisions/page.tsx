@@ -5,6 +5,8 @@ import type { Decision, DecisionCategory } from '@/data/decisions'
 import { DecisionInbox } from '@/components/decisions/DecisionInbox'
 import type { CardState } from '@/components/decisions/DecisionCard'
 import { api } from '@/lib/api'
+import { DecisionOutcomeCard } from '@/components/intelligence/DecisionOutcomeCard'
+import type { DecisionOutcome } from '@/components/intelligence/DecisionOutcomeCard'
 
 interface ResolvedDecision {
   id: string
@@ -28,10 +30,11 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 }
 
 export default function DecisionsPage() {
-  const [decisions, setDecisions]       = useState<Decision[]>([])
-  const [resolvedIds, setResolvedIds]   = useState<Map<string, CardState>>(new Map())
-  const [loading, setLoading]           = useState(true)
-  const [refreshedAt, setRefreshedAt]   = useState<string | null>(null)
+  const [decisions, setDecisions]             = useState<Decision[]>([])
+  const [resolvedIds, setResolvedIds]         = useState<Map<string, CardState>>(new Map())
+  const [resolvedDecisions, setResolvedDecisions] = useState<DecisionOutcome[]>([])
+  const [loading, setLoading]                 = useState(true)
+  const [refreshedAt, setRefreshedAt]         = useState<string | null>(null)
 
   useEffect(() => {
     const pendingFetch = api.get<Decision[]>('/api/decisions')
@@ -41,12 +44,47 @@ export default function DecisionsPage() {
 
     Promise.all([pendingFetch, resolvedFetch])
       .then(([pending, resolved]) => {
-        setDecisions(pending && pending.length > 0 ? pending : DECISIONS)
+        const allDecisions = pending && pending.length > 0 ? pending : DECISIONS
+        setDecisions(allDecisions)
+
         const map = new Map<string, CardState>()
         for (const r of resolved ?? []) {
           map.set(r.id, r.status)
         }
+
+        // Also read localStorage-stored decision states
+        try {
+          const raw = typeof window !== 'undefined' ? localStorage.getItem('eos:decision-states') : null
+          if (raw) {
+            const stored = JSON.parse(raw) as Record<string, CardState>
+            for (const [id, status] of Object.entries(stored)) {
+              if (status !== 'pending') {
+                map.set(id, status)
+              }
+            }
+          }
+        } catch {
+          // ignore parse errors
+        }
+
         setResolvedIds(map)
+
+        // Build resolved decision outcomes from acted decisions
+        const outcomes: DecisionOutcome[] = []
+        for (const [id, status] of map.entries()) {
+          if (status === 'pending') continue
+          const decision = allDecisions.find(d => d.id === id)
+          if (decision) {
+            outcomes.push({
+              id,
+              title: decision.title,
+              status: status as DecisionOutcome['status'],
+              hoursToDecide: 0,
+              category: decision.category,
+            })
+          }
+        }
+        setResolvedDecisions(outcomes)
         setRefreshedAt('just now')
       })
       .catch(() => {
@@ -130,6 +168,18 @@ export default function DecisionsPage() {
         <SectionLabel>Pending decisions</SectionLabel>
         <DecisionInbox decisions={decisions} resolvedIds={resolvedIds} />
       </div>
+
+      {/* Previously decided */}
+      {resolvedDecisions.length > 0 && (
+        <div>
+          <SectionLabel>Previously decided</SectionLabel>
+          <div className="space-y-2">
+            {resolvedDecisions.slice(0, 5).map(d => (
+              <DecisionOutcomeCard key={d.id} outcome={d} />
+            ))}
+          </div>
+        </div>
+      )}
 
     </div>
   )
