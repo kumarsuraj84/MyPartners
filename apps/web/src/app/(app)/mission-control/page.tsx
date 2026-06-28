@@ -148,13 +148,38 @@ function LiveIndicator() {
   )
 }
 
+// ─── Activity response type ───────────────────────────────────────────────────
+
+type ActivityRecommendation = {
+  id: string
+  text: string
+  preparedBy?: string
+}
+
+type ActivityMemoryUpdate = {
+  entityType: string
+  entityName: string
+  change: string
+  time: string
+}
+
+type ActivityResponse =
+  | ActivityJob[]
+  | {
+      jobs: ActivityJob[]
+      status?: Record<string, unknown>
+      whatHappened?: string[]
+      recommendations?: ActivityRecommendation[]
+      memoryUpdates?: ActivityMemoryUpdate[]
+    }
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function ExecutiveOfficePage() {
-  const { data: rawJobsData, isError, dataUpdatedAt } = useQuery<ActivityJob[] | { jobs: ActivityJob[] }>({
+  const { data: rawData, isError, dataUpdatedAt } = useQuery<ActivityResponse>({
     queryKey: ['office-activity'],
     queryFn: async () => {
-      const res = await fetch('/api/ai/jobs')
+      const res = await fetch('/api/ai/activity')
       if (!res.ok) throw new Error('unavailable')
       return res.json()
     },
@@ -163,13 +188,28 @@ export default function ExecutiveOfficePage() {
     refetchIntervalInBackground: false,
   })
 
-  // Handle both response shapes: direct array or { jobs: [] }
-  const apiJobs: ActivityJob[] | null = rawJobsData == null
-    ? null
-    : Array.isArray(rawJobsData)
-      ? rawJobsData
-      : rawJobsData.jobs ?? null
+  // Handle both response shapes: direct array (old jobs endpoint) or activity object
+  const isActivityObject = rawData != null && !Array.isArray(rawData)
 
+  const apiJobs: ActivityJob[] | null = rawData == null
+    ? null
+    : Array.isArray(rawData)
+      ? rawData
+      : rawData.jobs ?? null
+
+  const apiWhatHappened: string[] | null = isActivityObject
+    ? (rawData as Exclude<ActivityResponse, ActivityJob[]>).whatHappened ?? null
+    : null
+
+  const apiRecommendations: ActivityRecommendation[] | null = isActivityObject
+    ? (rawData as Exclude<ActivityResponse, ActivityJob[]>).recommendations ?? null
+    : null
+
+  const apiMemoryUpdates: ActivityMemoryUpdate[] | null = isActivityObject
+    ? (rawData as Exclude<ActivityResponse, ActivityJob[]>).memoryUpdates ?? null
+    : null
+
+  const hasLiveData = !isError && rawData != null
   const hasLiveJobs = !isError && apiJobs != null && apiJobs.length > 0
 
   const partnerGroups = groupByPartner(MOCK_OFFICE_EVENTS)
@@ -187,6 +227,7 @@ export default function ExecutiveOfficePage() {
           <p className="text-sm text-muted-foreground">
             Everything your office prepared today.
           </p>
+          {hasLiveData && <LiveIndicator />}
           {dataUpdatedAt > 0 && (
             <span className="text-[11px] text-muted-foreground/50 tabular-nums">
               Updated {relativeTime(dataUpdatedAt)}
@@ -200,7 +241,10 @@ export default function ExecutiveOfficePage() {
         <SectionLabel>What happened today</SectionLabel>
         <div className="rounded-xl border bg-card overflow-hidden">
           <div className="px-4 py-4 space-y-1">
-            {MOCK_WHAT_HAPPENED.map((line, i) => (
+            {(apiWhatHappened != null && apiWhatHappened.length > 0
+              ? apiWhatHappened
+              : MOCK_WHAT_HAPPENED
+            ).map((line, i) => (
               <p key={i} className="text-sm text-muted-foreground leading-relaxed">
                 {line}
               </p>
@@ -252,36 +296,48 @@ export default function ExecutiveOfficePage() {
 
       {/* ── 3. Memory updates ── */}
       <div>
-        <SectionHeader title="Memory updates" count={MOCK_MEMORY_UPDATES.length} />
-        <SectionLabel>What your office added to memory today</SectionLabel>
-        <div className="rounded-xl border bg-card overflow-hidden divide-y divide-border/50">
-          {MOCK_MEMORY_UPDATES.map(mu => (
-            <div key={mu.id} className="flex items-start gap-3 px-4 py-3">
-              <div className="flex-1 min-w-0 space-y-1">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <EntityChip type={mu.entityType as MemoryEntityType} name={mu.entityName} />
-                </div>
-                <p className="text-[11px] text-muted-foreground leading-relaxed pl-0.5">
-                  {mu.change}
-                </p>
+        {(() => {
+          const memoryUpdates = apiMemoryUpdates != null && apiMemoryUpdates.length > 0
+            ? apiMemoryUpdates
+            : MOCK_MEMORY_UPDATES
+          return (
+            <>
+              <SectionHeader title="Memory updates" count={memoryUpdates.length} />
+              <SectionLabel>What your office added to memory today</SectionLabel>
+              <div className="rounded-xl border bg-card overflow-hidden divide-y divide-border/50">
+                {memoryUpdates.map((mu, i) => (
+                  <div key={'id' in mu ? (mu as { id: string }).id : i} className="flex items-start gap-3 px-4 py-3">
+                    <div className="flex-1 min-w-0 space-y-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <EntityChip type={mu.entityType as MemoryEntityType} name={mu.entityName} />
+                      </div>
+                      <p className="text-[11px] text-muted-foreground leading-relaxed pl-0.5">
+                        {mu.change}
+                      </p>
+                    </div>
+                    <span className="text-[11px] text-muted-foreground/50 flex-shrink-0 whitespace-nowrap tabular-nums pt-0.5">
+                      {mu.time}
+                    </span>
+                  </div>
+                ))}
               </div>
-              <span className="text-[11px] text-muted-foreground/50 flex-shrink-0 whitespace-nowrap tabular-nums pt-0.5">
-                {mu.time}
-              </span>
-            </div>
-          ))}
-        </div>
+            </>
+          )
+        })()}
       </div>
 
       {/* ── 4. Recommendations ── */}
       <div>
         <SectionLabel>Recommendations</SectionLabel>
         <div className="space-y-2.5">
-          {MOCK_RECOMMENDATIONS.map(rec => (
+          {(apiRecommendations != null && apiRecommendations.length > 0
+            ? apiRecommendations
+            : MOCK_RECOMMENDATIONS
+          ).map(rec => (
             <RecommendationCard
               key={rec.id}
               recommendation={rec.text}
-              preparedBy={rec.preparedBy}
+              preparedBy={rec.preparedBy ?? ''}
             />
           ))}
         </div>
