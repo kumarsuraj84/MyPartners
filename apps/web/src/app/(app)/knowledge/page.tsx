@@ -80,11 +80,16 @@ import {
   StickyNote,
   Search,
   ArrowUpRight,
+  Sparkles,
 } from 'lucide-react'
+import { api } from '@/lib/api'
+import { ExecutivePatternCard, type ExecutivePattern } from '@/components/intelligence/ExecutivePatternCard'
+import { PreferenceInsightCard, type PreferenceInsight } from '@/components/intelligence/PreferenceInsightCard'
+import { RelationshipIntelligenceCard, type RelationshipIntelligence } from '@/components/intelligence/RelationshipIntelligenceCard'
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
-type Tab = 'people' | 'organisations' | 'projects' | 'decisions' | 'notes'
+type Tab = 'people' | 'organisations' | 'projects' | 'decisions' | 'notes' | 'intelligence'
 
 // ─── Tab config ────────────────────────────────────────────────────────────────
 
@@ -94,6 +99,7 @@ const TABS: { key: Tab; label: string; icon: React.ElementType }[] = [
   { key: 'projects',      label: 'Projects',       icon: FolderOpen },
   { key: 'decisions',     label: 'Decisions',      icon: Scale },
   { key: 'notes',         label: 'Notes',          icon: StickyNote },
+  { key: 'intelligence',  label: 'Insights',       icon: Sparkles },
 ]
 
 // ─── Badge styles ──────────────────────────────────────────────────────────────
@@ -688,6 +694,135 @@ function NotesTab({ search }: { search: string }) {
   )
 }
 
+// ─── Intelligence tab ──────────────────────────────────────────────────────────
+
+const MOCK_PATTERNS: ExecutivePattern[] = [
+  {
+    id: 'pat-1',
+    title: 'Morning decision-making',
+    description: 'You make most strategic decisions before 11am. Your acceptance rate for afternoon meeting requests is 40% lower.',
+    frequency: 'Observed across 3 months',
+    category: 'Scheduling',
+  },
+  {
+    id: 'pat-2',
+    title: 'Weekly investor touchpoints',
+    description: 'You proactively reach out to investors every 7-10 days, typically on Tuesdays and Thursdays.',
+    frequency: 'Consistent pattern',
+    category: 'Relationships',
+  },
+]
+
+const MOCK_INSIGHTS: PreferenceInsight[] = [
+  {
+    id: 'ins-1',
+    title: 'Brief over detailed',
+    detail: 'You open and act on emails under 100 words 3x more often than longer messages. Summaries perform best.',
+    learnedFrom: 'Email behaviour',
+    confidence: 'high',
+  },
+  {
+    id: 'ins-2',
+    title: 'Prefer async over sync for updates',
+    detail: 'Status updates via written notes get faster responses than meeting requests for the same topic.',
+    learnedFrom: 'Calendar and message patterns',
+    confidence: 'medium',
+  },
+]
+
+const MOCK_RELATIONSHIPS: RelationshipIntelligence[] = [
+  {
+    id: 'rel-1',
+    name: 'Marcus Chen',
+    role: 'Lead Investor',
+    company: 'Apex Ventures',
+    status: 'declining',
+    signal: 'No contact in 18 days. Last interaction was shorter than usual and he did not respond to the follow-up.',
+    lastContact: '18 days ago',
+    suggestedAction: 'Send a brief update on Q3 milestones',
+  },
+  {
+    id: 'rel-2',
+    name: 'Priya Nair',
+    role: 'VP Partnerships',
+    company: 'CloudScale',
+    status: 'active',
+    signal: 'Engaged consistently. Replied within 2 hours on last 4 interactions.',
+    lastContact: '3 days ago',
+  },
+]
+
+interface IntelligencePrefsResponse {
+  insights?: PreferenceInsight[]
+}
+
+interface IntelligencePatternsResponse {
+  patterns?: ExecutivePattern[]
+}
+
+interface IntelligenceRelationshipsResponse {
+  relationships?: RelationshipIntelligence[]
+}
+
+function IntelligenceTab() {
+  const { data: prefsData } = useQuery<IntelligencePrefsResponse>({
+    queryKey: ['intelligence-preferences'],
+    queryFn: () => api.get<IntelligencePrefsResponse>('/api/intelligence/preferences'),
+    retry: false,
+  })
+  const { data: patternsData } = useQuery<IntelligencePatternsResponse>({
+    queryKey: ['intelligence-patterns'],
+    queryFn: () => api.get<IntelligencePatternsResponse>('/api/intelligence/patterns'),
+    retry: false,
+  })
+  const { data: relationshipsData } = useQuery<IntelligenceRelationshipsResponse>({
+    queryKey: ['intelligence-relationships'],
+    queryFn: () => api.get<IntelligenceRelationshipsResponse>('/api/intelligence/relationships'),
+    retry: false,
+  })
+
+  const patterns = (patternsData?.patterns ?? MOCK_PATTERNS).slice(0, 4)
+  const insights = (prefsData?.insights ?? MOCK_INSIGHTS).slice(0, 4)
+  const allRelationships = relationshipsData?.relationships ?? MOCK_RELATIONSHIPS
+  const relationships = allRelationships
+    .filter((r: RelationshipIntelligence) => r.status === 'active' || r.status === 'declining')
+    .slice(0, 6)
+
+  return (
+    <div className="space-y-8">
+      {/* How you work */}
+      <div>
+        <SectionLabel>How you work</SectionLabel>
+        <div className="space-y-2">
+          {patterns.map((p: ExecutivePattern) => (
+            <ExecutivePatternCard key={p.id} pattern={p} />
+          ))}
+        </div>
+      </div>
+
+      {/* Learned from behaviour */}
+      <div>
+        <SectionLabel>Learned from behaviour</SectionLabel>
+        <div className="space-y-2">
+          {insights.map((i: PreferenceInsight) => (
+            <PreferenceInsightCard key={i.id} insight={i} />
+          ))}
+        </div>
+      </div>
+
+      {/* Relationship health */}
+      <div>
+        <SectionLabel>Relationship health</SectionLabel>
+        <div className="space-y-2">
+          {relationships.map((r: RelationshipIntelligence) => (
+            <RelationshipIntelligenceCard key={r.id} relationship={r} />
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Empty state ───────────────────────────────────────────────────────────────
 
 function EmptyState({ label }: { label: string }) {
@@ -704,12 +839,19 @@ export default function KnowledgePage() {
   const [activeTab, setActiveTab] = useState<Tab>('people')
   const [search, setSearch] = useState('')
 
+  const { data: prefsData } = useQuery<{ insights?: PreferenceInsight[] }>({
+    queryKey: ['intelligence-preferences'],
+    queryFn: () => api.get<{ insights?: PreferenceInsight[] }>('/api/intelligence/preferences'),
+    retry: false,
+  })
+
   const tabCounts: Record<Tab, number> = {
     people:        MOCK_PERSONS.length,
     organisations: MOCK_ORGANIZATIONS.length,
     projects:      MOCK_PROJECTS.length,
     decisions:     MOCK_DECISIONS.length,
     notes:         0,
+    intelligence:  prefsData?.insights?.length ?? 0,
   }
 
   return (
@@ -781,6 +923,7 @@ export default function KnowledgePage() {
         {activeTab === 'projects'      && <ProjectsTab      search={search} />}
         {activeTab === 'decisions'     && <DecisionsTab     search={search} />}
         {activeTab === 'notes'         && <NotesTab         search={search} />}
+        {activeTab === 'intelligence'  && <IntelligenceTab />}
       </div>
 
     </div>
