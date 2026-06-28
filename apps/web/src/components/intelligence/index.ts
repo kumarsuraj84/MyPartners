@@ -11,3 +11,6 @@ export type { MeetingBriefAttendee, RecentMessage, MeetingBrief } from './Meetin
 
 export { DecisionOutcomeCard } from './DecisionOutcomeCard'
 export type { DecisionOutcome, DecisionOutcomeCardProps } from './DecisionOutcomeCard'
+
+export { PreferenceInsightCard, StatChip } from './PreferenceInsightCard'
+export type { PreferenceInsight, PreferenceInsightCardProps, StatChipProps } from './PreferenceInsightCard'
