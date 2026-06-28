@@ -23,6 +23,7 @@ import { partnersRoutes } from './modules/partners/partners.routes.js'
 import { calendarRoutes } from './modules/calendar/calendar.routes.js'
 import { waitingRoutes } from './modules/waiting/waiting.routes.js'
 import { meetingBriefRoutes } from './modules/calendar/meeting-brief.routes.js'
+import { intelligenceRoutes } from './modules/intelligence/intelligence.routes.js'
 import { prisma } from './lib/prisma.js'
 // Commercial foundation: register connectors on startup
 import { registerConnector } from './lib/connector.js'
@@ -109,6 +110,7 @@ await app.register(calendarRoutes, { prefix: '/api/calendar' })
 await app.register(recommendationsRoutes, { prefix: '/api/recommendations' })
 await app.register(waitingRoutes, { prefix: '/api/waiting-for' })
 await app.register(meetingBriefRoutes, { prefix: '/api/meeting-brief' })
+await app.register(intelligenceRoutes, { prefix: '/api/intelligence' })
 
 // Start
 const port = parseInt(process.env.API_PORT || '3001')
