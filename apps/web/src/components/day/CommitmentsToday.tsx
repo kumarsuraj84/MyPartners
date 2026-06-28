@@ -1,12 +1,10 @@
 'use client'
 
-import { useQuery } from '@tanstack/react-query'
 import { Clock, AlertCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { MOCK_COMMITMENTS, type Commitment } from '@/data/mockCommitments'
-import { api } from '@/lib/api'
 
-interface ApiTask {
+export interface ApiTask {
   id: string
   title: string
   description?: string
@@ -18,7 +16,7 @@ interface ApiTask {
   waitingFrom?: string
 }
 
-function toCommitment(t: ApiTask): Commitment {
+export function toCommitment(t: ApiTask): Commitment {
   const now = new Date()
   const due = t.dueDate ? new Date(t.dueDate) : null
   const msPerDay = 86_400_000
@@ -29,11 +27,11 @@ function toCommitment(t: ApiTask): Commitment {
     id: t.id,
     title: t.title,
     category: t.category === 'waiting_for' ? 'owed-to-you' : 'you-owe',
-    owner: t.assigneeName ?? t.waitingFrom ?? 'Team',
-    dueDate: due ? due.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : 'No date',
+    owner: t.waitingFrom ?? 'You',
+    dueDate: due ? due.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : 'No deadline',
     daysUntilDue,
     isOverdue,
-    priority: (t.priority as Commitment['priority']) ?? 'medium',
+    priority: t.priority === 'urgent' ? 'high' : 'normal',
     context: t.description ?? '',
   }
 }
@@ -109,14 +107,12 @@ function CommitmentGroup({
   )
 }
 
-export function CommitmentsToday() {
-  const { data: apiTasks } = useQuery<ApiTask[]>({
-    queryKey: ['tasks-commitments'],
-    queryFn: () => api.get<ApiTask[]>('/api/tasks?category=commitment,waiting_for&status=pending,in_progress'),
-    retry: false,
-  })
+interface CommitmentsTodayProps {
+  commitments?: Commitment[]
+}
 
-  const all: Commitment[] = apiTasks ? apiTasks.map(toCommitment) : MOCK_COMMITMENTS
+export function CommitmentsToday({ commitments }: CommitmentsTodayProps) {
+  const all: Commitment[] = commitments ?? MOCK_COMMITMENTS
 
   const youOwe = all.filter(c => c.category === 'you-owe')
   const owedToYou = all.filter(c => c.category === 'owed-to-you')
@@ -127,8 +123,16 @@ export function CommitmentsToday() {
 
   return (
     <div className="space-y-4">
-      <CommitmentGroup label="You owe" items={youOwe} maxVisible={youOweMax} />
-      <CommitmentGroup label="Owed to you" items={owedToYou} maxVisible={owedMax} />
+      <CommitmentGroup
+        label={`You owe${youOwe.length > 0 ? ` · ${youOwe.length}` : ''}`}
+        items={youOwe}
+        maxVisible={youOweMax}
+      />
+      <CommitmentGroup
+        label={`Owed to you${owedToYou.length > 0 ? ` · ${owedToYou.length}` : ''}`}
+        items={owedToYou}
+        maxVisible={owedMax}
+      />
     </div>
   )
 }

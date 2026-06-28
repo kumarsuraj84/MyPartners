@@ -7,6 +7,8 @@ import { format } from 'date-fns'
 import { useState } from 'react'
 import { BellDot, Clock, AlertCircle } from 'lucide-react'
 import { MOCK_BRIEF } from '@/data/mockBrief'
+import { MOCK_COMMITMENTS, type Commitment } from '@/data/mockCommitments'
+import { type ApiTask, toCommitment } from '@/components/day/CommitmentsToday'
 import { DecisionBanner } from '@/components/ui/decision-banner'
 import { MorningBriefPreview } from '@/components/day/MorningBriefPreview'
 import { MeetingsToday } from '@/components/day/MeetingsToday'
@@ -76,6 +78,26 @@ export default function HomePage() {
     queryFn: () => api.get('/api/signals'),
     retry: false,
   })
+
+  const { data: commitmentTasks, isError: commitmentError } = useQuery<ApiTask[]>({
+    queryKey: ['tasks', 'commitment'],
+    queryFn: () => api.get<ApiTask[]>('/api/tasks?category=commitment&status=pending'),
+    retry: false,
+  })
+
+  const { data: waitingForTasks, isError: waitingForError } = useQuery<ApiTask[]>({
+    queryKey: ['tasks', 'waiting_for'],
+    queryFn: () => api.get<ApiTask[]>('/api/tasks?category=waiting_for&status=pending'),
+    retry: false,
+  })
+
+  // Merge live task queries into Commitment[]; fall back to mock on total failure
+  const hasLiveData = commitmentTasks !== undefined || waitingForTasks !== undefined
+  const commitments: Commitment[] | undefined = hasLiveData
+    ? [...(commitmentTasks ?? []), ...(waitingForTasks ?? [])].map(toCommitment)
+    : commitmentError && waitingForError
+    ? MOCK_COMMITMENTS
+    : undefined // still loading
 
   const dismissSignal = useMutation({
     mutationFn: (id: string) => api.patch(`/api/signals/${id}/dismiss`),
@@ -220,7 +242,7 @@ export default function HomePage() {
       {/* ── Commitments ───────────────────────────────────────────────────── */}
       <section>
         <Label>Commitments</Label>
-        <CommitmentsToday />
+        <CommitmentsToday commitments={commitments} />
       </section>
 
       {/* ── Office activity ───────────────────────────────────────────────── */}
