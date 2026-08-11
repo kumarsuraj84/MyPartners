@@ -5,13 +5,13 @@
 
 ## What Was Built
 
-A full-stack AI-powered workspace for executives: message triage, task extraction, business memory, daily briefs, and an admin console — running locally on Llama 3.1 8B.
+A full-stack AI-powered workspace for executives: message triage, task extraction, business memory, daily briefs, and an admin console.
 
 | | |
 |---|---|
 | **Repo** | kumarsuraj84/mypartners |
 | **Branch** | claude/executive-operating-assistant-hewsiu |
-| **AI Model** | llama3.1:8b via Ollama (local) |
+| **AI Provider** | Groq (`llama-3.3-70b-versatile` by default) |
 | **Database** | PostgreSQL 18 (local) |
 | **Status** | All three apps running |
 
@@ -50,7 +50,7 @@ The daily interface for the executive. Surfaces AI-generated context, prioritize
 ### 2. Fastify API — `apps/api` · port 3001
 TypeScript backend. All business logic, AI orchestration, and data access lives here.
 
-**Stack:** Fastify 4, TypeScript 5, Prisma 5, PostgreSQL 18, Redis, Ollama
+**Stack:** Fastify 4, TypeScript 5, Prisma 5, PostgreSQL 18, Redis, Groq SDK
 
 ---
 
@@ -209,7 +209,7 @@ Each stage's execution time is tracked for the UI replay timeline.
 - **Daily Brief** — Gathers urgent messages, pending tasks, commitments, follow-ups, signals, and recent decisions. Enriches with Business Memory context. Generates personalized morning brief in JSON. Cached per user per day.
 - **Signal Generator** — Deterministic (no AI prompt). Scans for overdue commitments, unacknowledged urgent messages, overdue waiting-for items. Throttled to once per 5 min per user.
 - **Entity Resolver** — Auto-matches email domains to organizations. Creates and deduplicates Person → Organization records.
-- **Provider Registry** — Swappable via `AI_PROVIDER` env var. Currently: **Ollama (llama3.1:8b)** — local, private, no API costs. Groq remains registered as fallback.
+- **Provider Registry** — Swappable via `AI_PROVIDER` env var. Currently: **Groq** (`llama-3.3-70b-versatile`). Add further providers by calling `registerProvider(name, impl)` in `apps/api/src/lib/ai.ts`.
 
 ---
 
@@ -222,7 +222,7 @@ Each stage's execution time is tracked for the UI replay timeline.
 | API Backend | Fastify 4, TypeScript 5, @fastify/jwt, @fastify/rate-limit, @fastify/cors |
 | Database | PostgreSQL 18, Prisma 5 ORM |
 | Cache / Queue | Redis 7, ioredis, BullMQ |
-| AI Inference | Ollama (local), Llama 3.1 8B, Groq SDK (standby) |
+| AI Inference | Groq SDK (`llama-3.3-70b-versatile`) |
 | Monorepo | Turborepo 2, pnpm workspaces |
 | OAuth Ready | Gmail/Google, WhatsApp (stub), SMS (stub) |
 
@@ -233,9 +233,9 @@ Each stage's execution time is tracked for the UI replay timeline.
 ```env
 DATABASE_URL=postgresql://postgres:***@localhost:5432/mypartners
 JWT_SECRET=<secret>
-AI_PROVIDER=ollama
-OLLAMA_MODEL=llama3.1:8b
-OLLAMA_URL=http://localhost:11434
+AI_PROVIDER=groq
+GROQ_API_KEY=<your-groq-key>
+GROQ_MODEL=llama-3.3-70b-versatile
 FRONTEND_URL=http://localhost:3000,http://localhost:3002
 PORT=3001
 NODE_ENV=development
@@ -253,8 +253,7 @@ NODE_ENV=development
 | Groq startup crash | Lazy-initialized Groq client — only created when `GROQ_API_KEY` is needed |
 | Supabase → local PostgreSQL | Supabase pooler "tenant/user not found" — switched to local PG 18, reset password via pg_hba.conf trust mode |
 | Health page crash | Added optional chaining on `overview.jobs?.running`; made `memory` and `uptime` optional in HealthRes interface |
-| Groq → Ollama | Added OllamaProvider to AI registry, set `AI_PROVIDER=ollama` in .env |
-| Llama 3.2 3B → 3.1 8B | Updated `OLLAMA_MODEL=llama3.1:8b` — better quality, fits in 32GB RAM |
+| Local model cleanup | Removed `OllamaProvider` from `apps/api/src/lib/ai.ts` and Ollama env vars; Groq is now the sole registered provider. |
 
 ---
 

@@ -44,33 +44,6 @@ class GroqProvider implements AIProvider {
   }
 }
 
-class OllamaProvider implements AIProvider {
-  private baseUrl: string
-  private model: string
-
-  constructor() {
-    this.baseUrl = process.env.OLLAMA_URL || 'http://localhost:11434'
-    this.model = process.env.OLLAMA_MODEL || 'llama3.2:3b'
-  }
-
-  async complete(options: AICompletionOptions): Promise<string> {
-    const res = await fetch(`${this.baseUrl}/api/chat`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: this.model,
-        messages: options.messages,
-        stream: false,
-        options: { temperature: options.temperature ?? 0.3 },
-        format: options.responseFormat === 'json' ? 'json' : undefined,
-      }),
-    })
-    if (!res.ok) throw new Error(`Ollama error: ${res.status} ${await res.text()}`)
-    const data = await res.json() as { message: { content: string } }
-    return data.message?.content ?? ''
-  }
-}
-
 // ─── Provider Registry ────────────────────────────────────────────────────────
 // Register providers here. No business logic may reference a specific provider.
 // All callers use `aiService` (the active provider) or `getProvider()` by name.
@@ -90,12 +63,9 @@ export function listProviders(): string[] {
 }
 
 const groqProvider = new GroqProvider()
-const ollamaProvider = new OllamaProvider()
 registerProvider('groq', groqProvider)
-registerProvider('ollama', ollamaProvider)
 
 const activeProviderName = process.env.AI_PROVIDER || 'groq'
 const defaultProvider = providerRegistry.get(activeProviderName) ?? groqProvider
 
-// Active AI service — set AI_PROVIDER=ollama in .env to use local Llama
 export const aiService: AIProvider = defaultProvider
